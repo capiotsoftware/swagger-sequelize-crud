@@ -1,9 +1,9 @@
 {
-  "_from": "git+https://Shobhit17@bitbucket.org/hackathonblr/modifiedsmcrud.git",
-  "_id": "swagger-mongoose-crud@0.0.4",
+  "_from": "git+https://Shobhit17@bitbucket.org/Shobhit17/swagger-sequelize-crud.git",
+  "_id": "swagger-sequelize-crud@0.0.4",
   "_inBundle": false,
   "_integrity": "sha1-ylI0UCyMm8Bo9lgrwvgN1uYcKUs=",
-  "_location": "/swagger-mongoose-crud",
+  "_location": "/swagger-sequelize-crud",
   "_phantomChildren": {
     "core-util-is": "1.0.2",
     "inherits": "2.0.3",
@@ -11,10 +11,10 @@
   },
   "_requested": {
     "type": "git",
-    "raw": "https://Shobhit17@bitbucket.org/hackathonblr/modifiedsmcrud.git",
-    "rawSpec": "https://Shobhit17@bitbucket.org/hackathonblr/modifiedsmcrud.git",
-    "saveSpec": "git+https://Shobhit17@bitbucket.org/hackathonblr/modifiedsmcrud.git",
-    "fetchSpec": "https://Shobhit17@bitbucket.org/hackathonblr/modifiedsmcrud.git",
+    "raw": "https://Shobhit17@bitbucket.org/Shobhit17/swagger-sequelize-crud.git",
+    "rawSpec": "https://Shobhit17@bitbucket.org/Shobhit17/swagger-sequelize-crud.git",
+    "saveSpec": "git+https://Shobhit17@bitbucket.org/Shobhit17/swagger-sequelize-crud.git",
+    "fetchSpec": "https://Shobhit17@bitbucket.org/Shobhit17/swagger-sequelize-crud.git",
     "gitCommittish": "master"
   },
   "_requiredBy": [
@@ -50,7 +50,7 @@
   ],
   "license": "MIT",
   "main": "index.js",
-  "name": "swagger-mongoose-crud",
+  "name": "swagger-sequelize-crud",
   "scripts": {
     "test": "mocha test"
   },
