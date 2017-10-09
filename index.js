@@ -111,7 +111,7 @@ function getSequelizeEquivalentType(json) {
 function getDepthOfObject(object) {
   var level = 1;
   Object.keys(object).forEach(key => {
-    if (typeof object[key] == 'object') {
+    if (typeof object[key] == 'object' && object[key]!=null) {
       var depth = getDepthOfObject(object[key]) + 1;
       level = Math.max(depth, level);
     }
