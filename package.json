@@ -2,7 +2,7 @@
   "_from": "git+https://Shobhit17@bitbucket.org/Shobhit17/swagger-sequelize-crud.git",
   "_id": "swagger-sequelize-crud@0.0.4",
   "_inBundle": false,
-  "_integrity": "sha1-ylI0UCyMm8Bo9lgrwvgN1uYcKUs=",
+  "_integrity": "sha1-C6Z3OteiO+Ppraqg/VQPngHR5Hc=",
   "_location": "/swagger-sequelize-crud",
   "_phantomChildren": {
     "core-util-is": "1.0.2",
@@ -21,9 +21,9 @@
     "#USER",
     "/"
   ],
-  "_resolved": "git+https://Shobhit17@bitbucket.org/hackathonblr/modifiedsmcrud.git#37ca625aa0c29ce9374f1416dc1e720afee23ed1",
-  "_spec": "https://Shobhit17@bitbucket.org/hackathonblr/modifiedsmcrud.git",
-  "_where": "D:\\Twin\\twin\\swagger-mongoose-codegen-Hackathon\\TestSql",
+  "_resolved": "git+https://Shobhit17@bitbucket.org/Shobhit17/swagger-sequelize-crud.git#93f4253b3048f17359f9e46f793e0d830d967647",
+  "_spec": "https://Shobhit17@bitbucket.org/Shobhit17/swagger-sequelize-crud.git",
+  "_where": "D:\\Test29",
   "author": {
     "name": "Abilash Mohan",
     "email": "abilash@capiot.com"

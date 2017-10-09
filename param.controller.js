@@ -19,13 +19,13 @@ var CrudController = require('./crud.controller');
  * defaults to the lowercase model name with 'Param' appended.
  * @param {Object} logger - logger instance
  */
-function ParamController(model, idName, logger) {
+function ParamController(model, idName, logger, complexLevel) {
     var modelName = idName.toLowerCase();
 
     var paramName = modelName + 'Param';
 
     // call super constructor
-    CrudController.call(this, model ,logger);
+    CrudController.call(this, model ,logger, complexLevel);
     // only set param if it is set, will default to 'id'
     if (!paramName) {
         paramName = modelName + 'Param';
