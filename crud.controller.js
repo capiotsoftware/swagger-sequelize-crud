@@ -16,19 +16,63 @@ var result = {};
 * @param {String} [idName] - The name of the id request parameter to use
 */
 
-var updateAttributesFunc = function () { };
-function CrudController(model, logger, complexLevel) {
+function CrudController(model, logger, complexLevel, modelMap) {
     // call super constructor
     BaseController.call(this, this);
-
     // set the model instance to work on
     this.model = model;
     this.logger = logger;
     this.complexLevel = complexLevel;
+    this.modelMap = modelMap
     // set id name if defined, defaults to 'id'
     this.omit = [];
     _.bindAll(this);
 }
+
+function addStruct(parentStruct, child) {
+    var childArray = child.split('.');
+    if (childArray.length == 1) {
+        parentStruct[child] = true;
+    } else {
+        // console.log('Parent struct is '+parentStruct[childArray[0]]);
+        if (typeof parentStruct[childArray[0]] == 'undefined')
+            parentStruct[childArray[0]] = {};
+        addStruct(parentStruct[childArray[0]], child.substr(child.indexOf('.') + 1));
+    }
+}
+
+function generateInclude(select, modelMap) {
+    var struct = {};
+    select.forEach(el => {
+        addStruct(struct, el);
+    })
+    console.log("struct is " + JSON.stringify(struct, null, 4));
+    var includeOption = generateIncludeRecursive(modelMap, struct, 'root', false);
+    console.log("Include object is " + JSON.stringify(includeOption, null, 4));
+    return includeOption;
+
+}
+
+function generateIncludeRecursive(modelMap, struct, model, modelOption) {
+    var attrArray = [], includeArray = [];
+    var includeObj = {};
+    if (modelOption) {
+        includeObj['as'] = model;
+        includeObj['model'] = modelMap[model];
+    }
+    Object.keys(struct).forEach(el => {
+        if (struct[el] == true) {
+            attrArray.push(el);
+        } else if (typeof struct[el] == 'object') {
+            includeArray.push(generateIncludeRecursive(modelMap, struct[el], el, true));
+        }
+    })
+    includeObj['attributes'] = attrArray;
+    includeArray.length == 0 ? null : includeObj['include'] = includeArray;
+    return includeObj;
+}
+
+
 
 var updatePromises = [];
 function updateTable(result, updateBody) {
@@ -42,7 +86,6 @@ function updateTable(result, updateBody) {
         }
     })
     console.log("Fields to be updated are " + JSON.stringify(updateFields, null, 4));
-
     updatePromises.push(result.updateAttributes(updateFields));
 }
 function getDepthOfObject(object) {
@@ -261,21 +304,25 @@ CrudController.prototype = {
     * or the empty Array if no documents have been found
     */
     _index: function (req, res) {
+        console.log("Inside Index c");
         var reqParams = params.map(req);
         var filter = reqParams['filter'] ? reqParams.filter : {};
         var sort = reqParams['sort'] ? [] : [];
         reqParams['sort'] ? reqParams.sort.split(',').map(el => el.split('-').length > 1 ? sort.push([el.split('-')[1], 'DESC']) : sort.push([el.split('-')[0]])) : null;
         // reqParams['sort'] ? reqParams.sort.split(',').map(el => el.split('-').length>1?sort[el.split('-')[1]]=-1:sort[el.split('-')[0]]=1) : null;
-        var select = reqParams['select'] ? reqParams.select.split(',') : null;
+        var select = reqParams['select'] ? reqParams.select.split(',') : { all: true };
         var page = reqParams['page'] ? reqParams.page : 1;
         var count = reqParams['count'] ? reqParams.count : 10;
         var skip = count * (page - 1);
         console.log("Sort " + sort + "\nSelect " + JSON.stringify(select));
         var self = this;
-        var sqlQueryObj = { limit: count, offset: skip, order: sort };
-        (select) ? sqlQueryObj.attributes = select : null;
-        var includeOption = getIncludeOptions(self.complexLevel);
-        this.model.findAll({ limit: count, offset: skip, attributes: select, order: sort, include: includeOption['include'] }).then(results => {
+        var includeOption = reqParams['select'] ? generateInclude(select, self.modelMap) : getIncludeOptions(self.complexLevel);
+        // console.log("IncludeOption is " + JSON.stringify(includeOption, null, 4));
+        var attributes = reqParams['select'] ? includeOption['attributes'] : select;
+        // var sqlQueryObj = { limit: count, offset: skip, order: sort, attributes: };
+        // (select) ? sqlQueryObj.attributes = select : null;
+
+        this.model.findAll({ limit: count, offset: skip, attributes: attributes, order: sort, include: includeOption['include'] }).then(results => {
             console.log("results are " + JSON.stringify(results));
             return self.Okay(res, results);
         });
@@ -311,9 +358,9 @@ CrudController.prototype = {
         //     return self.Okay(res,documents);
         // });
     },
-    digDown : (obj,key) => {
-        key.reduce((prev,curr,idx,arr,obj) => {
-            if(prev[curr] === null){
+    digDown: (obj, key) => {
+        key.reduce((prev, curr, idx, arr, obj) => {
+            if (prev[curr] === null) {
                 prev[curr] = {};
             }
             return prev;
@@ -330,39 +377,14 @@ CrudController.prototype = {
         var self = this;
         console.log("Inside show");
         var reqParams = params.map(req);
-        var select = reqParams['select'] ? reqParams.select.split(',') : {all: true}; //Comma seprated fileds list
-        var includeOption = getIncludeOptions(self.complexLevel);
-        this.model.findOne({ where: {id: reqParams['id']}, attributes:select ,include: includeOption['include'] }).then(results => {
-            console.log("Result are "+JSON.stringify(results, null, 4));
-            // if(select){
-            //     var newResult={};
-            //     var treeSelect = select.map(el => el.split("."));
-            //     treeSelect.forEach(el => {
-            //         this.digDown(newResult,el);             
-            //     });
-            //     // select
-            //     results = newResult;
-            // }
-
-
-            // var newResult = {};
-            // select.forEach(attr=>{
-            //     eval('newResult.'+attr) = results[attr];
-            // })
-            console.log("Results: " + JSON.stringify(results,null,4));
+        var select = reqParams['select'] ? reqParams.select.split(',') : { all: true }; //Comma seprated fileds list
+        var includeOption = reqParams['select'] ? generateInclude(select, self.modelMap) : getIncludeOptions(self.complexLevel);
+        // console.log("IncludeOption is " + JSON.stringify(includeOption, null, 4));
+        var attributes = reqParams['select'] ? includeOption['attributes'] : select;
+        this.model.findOne({ where: { id: reqParams['id'] }, attributes: attributes, include: includeOption['include'] }).then(results => {
+            console.log("Results: " + JSON.stringify(results, null, 4));
             return self.Okay(res, self.getResponseObject(results));
         });
-        // var query = this.model.findOne({ '_id': reqParams['id'], deleted: false });
-        // if (select.length > 0) {
-        //     query = query.select(select.join(' '));
-        // }
-        // query.exec().then((document) => {
-        //     if (!document) {
-        //         return self.NotFound(res);
-        //     } else {
-        //         return self.Okay(res, self.getResponseObject(document));
-        //     }
-        // }, err => self.Error(res, err));
     },
 
     /**
@@ -614,8 +636,8 @@ CrudController.prototype = {
     _markAsDeleted: function (req, res) {
         var reqParams = params.map(req);
         var self = this;
-        this.model.findOne({where: {id : reqParams['id']}}).then(result=>{
-            result.destroy().then(rowsDeleted=>{
+        this.model.findOne({ where: { id: reqParams['id'] } }).then(result => {
+            result.destroy().then(rowsDeleted => {
                 var logObject = {
                     'operation': 'Delete',
                     'user': req.user ? req.user.username : req.headers['masterName'],
@@ -623,12 +645,12 @@ CrudController.prototype = {
                     'timestamp': new Date()
                 };
                 self.logger.audit(JSON.stringify(logObject));
-                
+
                 return self.Okay(res, {});
-            }, err=>{
+            }, err => {
                 return self.Error(res, err);
             });
-            
+
         })
         this.model.findOne({ '_id': reqParams['id'], deleted: false }, function (err, document) {
             if (err) {

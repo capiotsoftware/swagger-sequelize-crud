@@ -27,7 +27,7 @@ function SequelizeModel(sequelize, definition, modelName, options) {
       sequelize.sync()
     })
     .then(() => {
-      ParamController.call(self, self.model, modelName, logger, complexLevel);
+      ParamController.call(self, self.model, modelName, logger, complexLevel, modelMap);
     });
 
   this.index = this._index.bind(this);
@@ -42,6 +42,8 @@ function SequelizeModel(sequelize, definition, modelName, options) {
   this.bulkShow = this._bulkShow.bind(this);
   this.markAsDeleted = this._markAsDeleted.bind(this);
 }
+
+var modelMap = [];
 
 function generateSequelize(sequelize, tableName, obj) {
   console.log("New Table " + tableName);
@@ -78,6 +80,7 @@ function generateSequelize(sequelize, tableName, obj) {
       console.log("Creating Model for ... " + require('util').inspect(columns, { depth: null }));
       var c2 = getSequelizeDefinition(columns);
       var model = sequelize.define(tableName, c2, { freezeTableName: true, paranoid: true });
+      modelMap[tableName] = model;
       childModels.forEach(el => {
         if (el['relationship'] == 'many') {
           model.hasMany(el['model'], { as: el['name'], onDelete: 'CASCADE', hooks: true, constraints:true });
