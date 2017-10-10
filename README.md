@@ -1,7 +1,7 @@
-# swagger-mongoose-crud
+# swagger-sequelize-crud
 [![Build Status](https://travis-ci.org/capiotsoftware/swagger-mongoose-crud.svg?branch=master)](https://travis-ci.org/capiotsoftware/swagger-mongoose-crud)
 
-A Simple wrapper for Swagger based mongoose CRUD operation. This plugin is a modfied version of the Mongoose CRUD operation introducted by [Micheal Krone](https://github.com/michaelkrone).
+A Simple wrapper for Swagger based SQL CRUD operation. This plugin is a modfied version of the Mongoose CRUD operation introducted by [Micheal Krone](https://github.com/michaelkrone).
 
 This module exposes following basic operations.
 * Create
@@ -12,7 +12,7 @@ This module exposes following basic operations.
 
 ## Installation
 ``` sh
-npm install https://github.com/capiotsoftware/swagger-mongoose-crud.git --save
+npm install https://github.com/capiotsoftware/swagger-sequelize-crud.git --save
 ```
 
 ## Usage 
