@@ -12,7 +12,7 @@ This module exposes following basic operations.
 
 ## Installation
 ``` sh
-npm install https://github.com/capiotsoftware/swagger-sequelize-crud.git --save
+npm install https://bitbucket.org/capiot/swagger-sequelize-crud.git --save
 ```
 
 ## Usage 
