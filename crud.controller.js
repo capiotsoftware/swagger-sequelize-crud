@@ -41,34 +41,41 @@ function addStruct(parentStruct, child) {
     }
 }
 
-function generateInclude(select, modelMap) {
+function generateInclude(select, modelMap, rootTableName) {
     var struct = {};
     select.forEach(el => {
         addStruct(struct, el);
     })
     console.log("struct is " + JSON.stringify(struct, null, 4));
-    var includeOption = generateIncludeRecursive(modelMap, struct, 'root', false);
+    var includeOption = generateIncludeRecursive(modelMap, struct, rootTableName, false);
     console.log("Include object is " + JSON.stringify(includeOption, null, 4));
     return includeOption;
-
 }
 
 function generateIncludeRecursive(modelMap, struct, model, modelOption) {
-    var attrArray = [], includeArray = [];
-    var includeObj = {};
-    if (modelOption) {
-        includeObj['as'] = model;
-        includeObj['model'] = modelMap[model];
-    }
-    Object.keys(struct).forEach(el => {
-        if (struct[el] == true) {
-            attrArray.push(el);
-        } else if (typeof struct[el] == 'object') {
-            includeArray.push(generateIncludeRecursive(modelMap, struct[el], el, true));
+    var includeObj = null;
+    if(modelMap[model] != null){
+        var attrArray = [], includeArray = [];
+        includeObj = {};
+        if (modelOption) {
+            includeObj['as'] = model;
+            includeObj['model'] = modelMap[model];
+            // console.log("Attributes of model are "+JSON.stringify(,null,4));
         }
-    })
-    includeObj['attributes'] = attrArray;
-    includeArray.length == 0 ? null : includeObj['include'] = includeArray;
+        var validAttributes = Object.keys(modelMap[model].rawAttributes);
+        Object.keys(struct).forEach(el => {
+            if (struct[el] == true) {
+                if(validAttributes.indexOf(el)!=-1)
+                    attrArray.push(el);
+            } else if (typeof struct[el] == 'object') {
+                var singleInclude = generateIncludeRecursive(modelMap, struct[el], el, true);                
+                if(singleInclude!=null)
+                    includeArray.push(singleInclude);
+            }
+        })
+        includeObj['attributes'] = attrArray;
+        includeArray.length == 0 ? null : includeObj['include'] = includeArray;
+    }
     return includeObj;
 }
 
@@ -316,12 +323,9 @@ CrudController.prototype = {
         var skip = count * (page - 1);
         console.log("Sort " + sort + "\nSelect " + JSON.stringify(select));
         var self = this;
-        var includeOption = reqParams['select'] ? generateInclude(select, self.modelMap) : getIncludeOptions(self.complexLevel);
+        var includeOption = reqParams['select'] ? generateInclude(select, self.modelMap, self.model.getTableName()) : getIncludeOptions(self.complexLevel);
         // console.log("IncludeOption is " + JSON.stringify(includeOption, null, 4));
         var attributes = reqParams['select'] ? includeOption['attributes'] : select;
-        // var sqlQueryObj = { limit: count, offset: skip, order: sort, attributes: };
-        // (select) ? sqlQueryObj.attributes = select : null;
-
         this.model.findAll({ limit: count, offset: skip, attributes: attributes, order: sort, include: includeOption['include'] }).then(results => {
             console.log("results are " + JSON.stringify(results));
             return self.Okay(res, results);
@@ -378,7 +382,7 @@ CrudController.prototype = {
         console.log("Inside show");
         var reqParams = params.map(req);
         var select = reqParams['select'] ? reqParams.select.split(',') : { all: true }; //Comma seprated fileds list
-        var includeOption = reqParams['select'] ? generateInclude(select, self.modelMap) : getIncludeOptions(self.complexLevel);
+        var includeOption = reqParams['select'] ? generateInclude(select, self.modelMap, self.model.getTableName()) : getIncludeOptions(self.complexLevel);
         // console.log("IncludeOption is " + JSON.stringify(includeOption, null, 4));
         var attributes = reqParams['select'] ? includeOption['attributes'] : select;
         this.model.findOne({ where: { id: reqParams['id'] }, attributes: attributes, include: includeOption['include'] }).then(results => {
