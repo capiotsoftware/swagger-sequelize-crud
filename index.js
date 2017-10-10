@@ -1,23 +1,48 @@
 'use strict';
-var mongoose = require('mongoose');
 var ParamController = require('./param.controller');
 var _ = require('lodash');
 var log4js = require('log4js');
 log4js.levels.forName('AUDIT', 50001);
-var logger = process.env.PROD_ENV ? log4js.getLogger('swagger-mongoose-crud') : log4js.getLogger('swagger-mongoose-crud-dev');
+var logger = process.env.PROD_ENV ? log4js.getLogger('swagger-sequelize-crud') : log4js.getLogger('swagger-sequelize-crud-dev');
 var params = require('./swagger.params.map');
-var uniqueValidator = require('mongoose-unique-validator');
 const Sequelize = require("sequelize");
 /**
-* Constructor function for MongooseModel
+* Constructor function for SequelizeModel
 * @classdesc Basic mongoose Model sytem
 * Uses the definition passed on the by the Input object for creating crud operations
 * @constructor
 * @inherits ParamController
-* @param {Object} schema  - Schema for mongoose object.
+* @param {Object} sequelize  - sequelize object with db connection.
+* @param {Object} definition  - Structure of SQL tables in mongoose schema format.
 * @param {String} modelName - Model name to which data needs to be populated.
 * @param {Object} options - optional options object. Takes 2 values - logger and collectionName
 */
+function SequelizeModel(sequelize, definition, modelName, options) {
+  logger = options.logger ? options.logger : logger;
+  var self = this;
+  var complexLevel = getDepthOfObject(definition) - 1;
+  generateSequelize(sequelize, modelName, definition)
+    .then(model => {
+      self.model = model;
+      sequelize.sync()
+    })
+    .then(() => {
+      ParamController.call(self, self.model, modelName, logger, complexLevel);
+    });
+
+  this.index = this._index.bind(this);
+  this.create = this._create.bind(this);
+  this.show = this._show.bind(this);
+  this.update = this._update.bind(this);
+  this.destroy = this._destroy.bind(this);
+  this.rucc = this._rucc.bind(this);
+  this.count = this._count.bind(this);
+  this.bulkUpdate = this._bulkUpdate.bind(this);
+  this.bulkUpload = this._bulkUpload.bind(this);
+  this.bulkShow = this._bulkShow.bind(this);
+  this.markAsDeleted = this._markAsDeleted.bind(this);
+}
+
 function generateSequelize(sequelize, tableName, obj) {
   console.log("New Table " + tableName);
   var childModels = [];
@@ -119,39 +144,15 @@ function getDepthOfObject(object) {
   return level;
 }
 
-function MongooseModel(sequelize, definition, modelName, options) {
-  logger = options.logger ? options.logger : logger;
-  var self = this;
-  var complexLevel = getDepthOfObject(definition) - 1;
-  generateSequelize(sequelize, modelName, definition)
-    .then(model => {
-      self.model = model;
-      sequelize.sync()
-    })
-    .then(() => {
-      ParamController.call(self, self.model, modelName, logger, complexLevel);
-    });
 
-  this.index = this._index.bind(this);
-  this.create = this._create.bind(this);
-  this.show = this._show.bind(this);
-  this.update = this._update.bind(this);
-  this.destroy = this._destroy.bind(this);
-  this.rucc = this._rucc.bind(this);
-  this.count = this._count.bind(this);
-  this.bulkUpdate = this._bulkUpdate.bind(this);
-  this.bulkUpload = this._bulkUpload.bind(this);
-  this.bulkShow = this._bulkShow.bind(this);
-  this.markAsDeleted = this._markAsDeleted.bind(this);
-}
 
-MongooseModel.prototype = {
-  constructor: MongooseModel,
+SequelizeModel.prototype = {
+  constructor: SequelizeModel,
   model: null,
   schema: null,
   definition: null,
   swagMapper: params.map
 };
 
-MongooseModel.prototype = _.create(ParamController.prototype, MongooseModel.prototype);
-exports = module.exports = MongooseModel.bind(MongooseModel);
+SequelizeModel.prototype = _.create(ParamController.prototype, SequelizeModel.prototype);
+exports = module.exports = SequelizeModel.bind(SequelizeModel);
