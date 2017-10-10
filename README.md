@@ -17,19 +17,18 @@ npm install https://github.com/capiotsoftware/swagger-mongoose-crud.git --save
 
 ## Usage 
 ```javascript
-var Mongoose = require('Mongoose');
-var SMCrud = require('swagger-mongoose-crud.git');
+const Sequelize = require('sequelize');
+const SMCrud = require("swagger-sequelize-crud");
 //In your controller, simply expose the following
-var schema = new Mongoose.Schema({ 
-    //Your mongoose Schema definition here.
-});
-var modelName = "Your model Name";
+var sequelize = new Sequelize("dbUrl,options);
+var definition = {}; //Your mongoose Schema definition here.  
+var modelName = "Your Table Name";
 var options = {
- collectionName: "name of your collection",
+ collectionName: "name of your Table",
  logger: "your logger object"
 }
 
-var crud = new SMCrud(schema,modelName, options);
+var crud = new SMCrud(sequelize, definition, modelName, options);
 var exports = {};
 
 //Takes all parameters for creating an entry
@@ -41,39 +40,19 @@ exports.update = crud.update;
 //Will list out the entire collection, No parameters
 exports.index = crud.index;
 
-//Will mark the entity as deleted by setting deleted flag to true, takes 'id'
+//Will mark the entity as deleted by setting deleted dateTime to time it was deleted, takes 'id'
 exports.markAsDeleted = crud.markAsDeleted;
-
-//Will delete the entity, takes 'id'
-exports.destroy = crud.destroy;
 
 //Will show a single entity, takes 'id'
 exports.show = crud.show;
 
-//Will count the number of entries in the DB, Supports filter options.
-exports.count = crud.count;
-
-//crud.model will hold the Mongoose Model.
-//crud.schema will hold the schema passed on at constructor
-crud.select = [ 
-    //list of the fields for the listing in Index call
-];
-
-crud.omit = [
-    //list of the fields to disallow for Index search
-];
 
 module.exports = exports;
 ```
 
 ## Fields added by this library to your schema
 
-* _createdAt_ : Type _Date_. The time of creation of the document
-* _lastUpdated_ : Type _Date_. The last updated time of the document
-* _deleted_ : Type _Boolean_. This is false by default. The 
+* createdAt : Type Date. The time of creation of the tuple.
+* updatedAt : Type Date. The last updated time of the tuple.
+* deletedAt : Type Date. This is null by default. The value is updated when Delete operation is called by crud.
 
-## Indexed fields
-
-* lastUpdated
-* createdAt
-.
