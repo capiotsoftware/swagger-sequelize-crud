@@ -21,6 +21,7 @@ const Sequelize = require('sequelize');
 const SMCrud = require("swagger-sequelize-crud");
 //In your controller, simply expose the following
 var sequelize = new Sequelize("dbUrl,options);
+//db needs to be created before using sequelize object
 var definition = {}; //Your mongoose Schema definition here.  
 var modelName = "Your Table Name";
 var options = {
