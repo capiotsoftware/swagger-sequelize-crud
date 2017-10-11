@@ -13,7 +13,9 @@ var result = {};
 * @constructor
 * @inherits BaseController
 * @param {Model} model - The mongoose model to operate on
-* @param {String} [idName] - The name of the id request parameter to use
+* @param {Object} logger - The logger object 
+* @param {Integer} complexLevel - Max nested level of schema
+* @param {Map} modelMap - Map of all Sequelize Model mapped to its tableName.
 */
 
 function CrudController(model, logger, complexLevel, modelMap) {
@@ -65,18 +67,23 @@ function addStruct(parentStruct, child) {
     }
 }
 
-function generateInclude(select, modelMap, rootTableName) {
+function generateInclude(select, modelMap, rootTableName, excludeFlag) {
     var struct = {};
-    select.forEach(el => {
+    var newSelect = [];
+    if(excludeFlag)
+     newSelect = select.filter(el => el.split('')[0] === "-").map(el => el.substring(1,el.length));
+    else 
+     newSelect = select.filter(el => el.split('')[0] !== "-").map(el => el.split('')[0] === '+'?el.substring(1,el.length):el)
+    newSelect.forEach(el => {
         addStruct(struct, el);
     })
     console.log("struct is " + JSON.stringify(struct, null, 4));
-    var includeOption = generateIncludeRecursive(modelMap, struct, rootTableName, false);
+    var includeOption = generateIncludeRecursive(modelMap, struct, rootTableName, false, excludeFlag);
     console.log("Include object is " + JSON.stringify(includeOption, null, 4));
     return includeOption;
 }
 
-function generateIncludeRecursive(modelMap, struct, model, modelOption) {
+function generateIncludeRecursive(modelMap, struct, model, modelOption, excludeFlag) {
     var includeObj = null;
     if(modelMap[model] != null){
         var attrArray = [], includeArray = [];
@@ -92,12 +99,12 @@ function generateIncludeRecursive(modelMap, struct, model, modelOption) {
                 if(validAttributes.indexOf(el)!=-1)
                     attrArray.push(el);
             } else if (typeof struct[el] == 'object') {
-                var singleInclude = generateIncludeRecursive(modelMap, struct[el], el, true);                
+                var singleInclude = generateIncludeRecursive(modelMap, struct[el], el, true, excludeFlag);                
                 if(singleInclude!=null)
                     includeArray.push(singleInclude);
             }
         })
-        includeObj['attributes'] = attrArray;
+        includeObj['attributes'] = excludeFlag?{exclude:attrArray}:attrArray;  
         includeArray.length == 0 ? null : includeObj['include'] = includeArray;
     }
     return includeObj;
@@ -349,7 +356,13 @@ CrudController.prototype = {
         var includeOption = getIncludeOptions(self.complexLevel)
         if(reqParams['select']){
             var selectArray = reqParams.select.split(',');
-            includeOption = generateInclude(selectArray, self.modelMap, self.model.getTableName());
+            var excludeFlag = true;
+            selectArray.forEach(el=>{
+                if(el.substr(0,1) != '-'){
+                    excludeFlag = false;
+                }
+            })
+            includeOption = generateInclude(selectArray, self.modelMap, self.model.getTableName(), excludeFlag);
             select = includeOption['attributes'];
         }
         console.log("IncludeOption is "+JSON.stringify(includeOption, null ,4));
@@ -404,7 +417,6 @@ CrudController.prototype = {
         var sequelizeBody = convertToSequelizeCreate(tableName, body);
         console.log("Sequelize Body is....\n" + JSON.stringify(sequelizeBody, null, 4));
         var includeOption = getIncludeOptions(self.complexLevel);
-        // console.log(JSON.stringify(includeOption,null,4));
         this.model.create(sequelizeBody, includeOption).then(data => {
             var returnObj = data.get({
                 plain: true
@@ -420,26 +432,6 @@ CrudController.prototype = {
         }, err => {
             return self.Error(res, err);
         });
-        // //new this.model(req.body).save(function(Err,document){
-        // var payload = 'data';
-        // var body = params.map(req)[payload];
-        // var collectionName=this.model.modelName;
-        // this.model.create(body, function (err, document) {
-        //     if (err) {
-        //         return self.Error(res,err);
-        //     }
-        //     var logObject = {
-        //         'operation':'insert',
-        //         'user':req.user?req.user.username:req.headers['masterName'],
-        //         '_id':document._id,
-        //         'timestamp':new Date()
-        //     };
-        //     self.logger.audit(JSON.stringify(logObject));
-        //     // console.log("Res form lib",res.statusCode);
-        //     result=callTwinComplete(self.getResponseObject(document),res,"insert",collectionName);
-        //     // console.log("documeen res ",self.getResponseObject(document));
-        //     return self.Okay(res,self.getResponseObject(document));
-        // });
     },
     _bulkShow: function (req, res) {
         var sort = {};
