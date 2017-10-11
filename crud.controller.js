@@ -29,6 +29,30 @@ function CrudController(model, logger, complexLevel, modelMap) {
     _.bindAll(this);
 }
 
+function insertWhere(modelMap, includeStruct, whereStruct, modelName) {
+    Object.keys(whereStruct).forEach(el => {
+        if (el == '$where') {
+            includeStruct['where'] = whereStruct['$where'];
+        } else {
+            if (typeof includeStruct['include'] == 'undefined')
+                includeStruct['include'] = [];
+            var modelExistFlag = false;
+            includeStruct['include'].forEach(includeObj => {
+                if (typeof includeObj['as'] != 'undefined' && includeObj['as'] == el) {
+                    insertWhere(modelMap, includeObj, whereStruct[el], el);
+                    modelExistFlag = true;
+                    // break;
+                }
+            })
+            if (!modelExistFlag) {
+                var newIncludeObj = { as: el, model: modelMap[el], attributes: [] }
+                insertWhere(modelMap, newIncludeObj, whereStruct[el], el);
+                includeStruct['include'].push(newIncludeObj);
+            }
+        }
+    })
+}
+
 function addStruct(parentStruct, child) {
     var childArray = child.split('.');
     if (childArray.length == 1) {
@@ -311,63 +335,35 @@ CrudController.prototype = {
     * or the empty Array if no documents have been found
     */
     _index: function (req, res) {
-        console.log("Inside Index c");
+        console.log("Inside Index");
         var reqParams = params.map(req);
-        var filter = reqParams['filter'] ? reqParams.filter : {};
+        var filter = reqParams['filter'] ? reqParams.filter : '{}';
         var sort = reqParams['sort'] ? [] : [];
         reqParams['sort'] ? reqParams.sort.split(',').map(el => el.split('-').length > 1 ? sort.push([el.split('-')[1], 'DESC']) : sort.push([el.split('-')[0]])) : null;
         // reqParams['sort'] ? reqParams.sort.split(',').map(el => el.split('-').length>1?sort[el.split('-')[1]]=-1:sort[el.split('-')[0]]=1) : null;
-        var select = reqParams['select'] ? reqParams.select.split(',') : { all: true };
         var page = reqParams['page'] ? reqParams.page : 1;
         var count = reqParams['count'] ? reqParams.count : 10;
         var skip = count * (page - 1);
-        console.log("Sort " + sort + "\nSelect " + JSON.stringify(select));
         var self = this;
-        var includeOption = reqParams['select'] ? generateInclude(select, self.modelMap, self.model.getTableName()) : getIncludeOptions(self.complexLevel);
-        // console.log("IncludeOption is " + JSON.stringify(includeOption, null, 4));
-        var attributes = reqParams['select'] ? includeOption['attributes'] : select;
-        this.model.findAll({ limit: count, offset: skip, attributes: attributes, order: sort, include: includeOption['include'] }).then(results => {
+        var select = {all:true};
+        var includeOption = getIncludeOptions(self.complexLevel)
+        if(reqParams['select']){
+            var selectArray = reqParams.select.split(',');
+            includeOption = generateInclude(selectArray, self.modelMap, self.model.getTableName());
+            select = includeOption['attributes'];
+        }
+        console.log("IncludeOption is "+JSON.stringify(includeOption, null ,4));
+        insertWhere(self.modelMap, includeOption, JSON.parse(filter), self.model.getTableName());
+        var baseWhere = {};
+        if(typeof includeOption['where'] != 'undefined'){
+            baseWhere = includeOption['where'];
+        }
+        console.log("Include option is "+JSON.stringify(includeOption, null, 4));
+        this.model.findAll({ limit: count, offset: skip, attributes: select, order: sort, include: includeOption['include'], where: baseWhere }).then(results => {
             console.log("results are " + JSON.stringify(results));
             return self.Okay(res, results);
-        });
-        // if (typeof filter === 'string') {
-        //     try {
-        //         filter = JSON.parse(filter);
-        //         filter = self.FilterParse(filter);
-        //     } catch (err) {
-        //         this.logger.error('Failed to parse filter :' + err);
-        //         filter = {};
-        //     }
-        // }
-        //
-        // if (this.omit.length) {
-        //     filter = _.omit(filter, this.omit);
-        // }
-        // filter.deleted = false;
-        // var query = this.model.find(filter);
-        //
-        // if (this.lean) {
-        //     query.lean();
-        // }
-        //
-        // if (this.select.length || select.length) {
-        //     var union = this.select.concat(select);
-        //     query.select(union.join(' '));
-        // }
-        // query.skip(skip).limit(count).sort(sort);
-        // query.exec(function (err, documents) {
-        //     if (err) {
-        //         return self.Error(res,err);
-        //     }
-        //     return self.Okay(res,documents);
-        // });
-    },
-    digDown: (obj, key) => {
-        key.reduce((prev, curr, idx, arr, obj) => {
-            if (prev[curr] === null) {
-                prev[curr] = {};
-            }
-            return prev;
+        },err =>{
+            return self.Error(res,err);
         });
     },
     /**
@@ -388,6 +384,8 @@ CrudController.prototype = {
         this.model.findOne({ where: { id: reqParams['id'] }, attributes: attributes, include: includeOption['include'] }).then(results => {
             console.log("Results: " + JSON.stringify(results, null, 4));
             return self.Okay(res, self.getResponseObject(results));
+        },err =>{
+            return self.Error(res,err);
         });
     },
 
@@ -582,9 +580,10 @@ CrudController.prototype = {
                         'timestamp': new Date()
                     };
                     self.logger.audit(JSON.stringify(logObject));
-                    //   result = callTwinComplete(self.getResponseObject(updated),res,"update",collectionName);
                     return self.Okay(res, self.getResponseObject(updatedResult));
                 })
+            },err =>{
+                return self.Error(res,err);
             })
         });
     },
@@ -656,29 +655,6 @@ CrudController.prototype = {
             });
 
         })
-        this.model.findOne({ '_id': reqParams['id'], deleted: false }, function (err, document) {
-            if (err) {
-                return self.Error(res, err);
-            }
-
-            if (!document) {
-                return self.NotFound(res);
-            }
-            document.deleted = true;
-            document.save(function (err) {
-                if (err) {
-                    return self.Error(res, err);
-                }
-                var logObject = {
-                    'operation': 'Delete',
-                    'user': req.user ? req.user.username : req.headers['masterName'],
-                    '_id': document._id,
-                    'timestamp': new Date()
-                };
-                self.logger.audit(JSON.stringify(logObject));
-                return self.Okay(res, {});
-            });
-        });
     },
 
     _rucc: function (queryObject, callBack) {
