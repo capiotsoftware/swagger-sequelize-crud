@@ -25,7 +25,7 @@ function CrudController(model, logger, complexLevel, modelMap) {
     this.model = model;
     this.logger = logger;
     this.complexLevel = complexLevel;
-    this.modelMap = modelMap
+    this.modelMap = modelMap;
     // set id name if defined, defaults to 'id'
     this.omit = [];
     _.bindAll(this);
@@ -77,9 +77,9 @@ function generateInclude(select, modelMap, rootTableName, excludeFlag) {
     newSelect.forEach(el => {
         addStruct(struct, el);
     })
-    console.log("struct is " + JSON.stringify(struct, null, 4));
+    // console.log("struct is " + JSON.stringify(struct, null, 4));
     var includeOption = generateIncludeRecursive(modelMap, struct, rootTableName, false, excludeFlag);
-    console.log("Include object is " + JSON.stringify(includeOption, null, 4));
+    // console.log("Include object is " + JSON.stringify(includeOption, null, 4));
     return includeOption;
 }
 
@@ -365,13 +365,13 @@ CrudController.prototype = {
             includeOption = generateInclude(selectArray, self.modelMap, self.model.getTableName(), excludeFlag);
             select = includeOption['attributes'];
         }
-        console.log("IncludeOption is "+JSON.stringify(includeOption, null ,4));
+        // console.log("IncludeOption is "+JSON.stringify(includeOption, null ,4));
         insertWhere(self.modelMap, includeOption, JSON.parse(filter), self.model.getTableName());
         var baseWhere = {};
         if(typeof includeOption['where'] != 'undefined'){
             baseWhere = includeOption['where'];
         }
-        console.log("Include option is "+JSON.stringify(includeOption, null, 4));
+        // console.log("Include option is "+JSON.stringify(includeOption, null, 4));
         this.model.findAll({ limit: count, offset: skip, attributes: select, order: sort, include: includeOption['include'], where: baseWhere }).then(results => {
             console.log("results are " + JSON.stringify(results));
             return self.Okay(res, results);
@@ -390,11 +390,20 @@ CrudController.prototype = {
         var self = this;
         console.log("Inside show");
         var reqParams = params.map(req);
-        var select = reqParams['select'] ? reqParams.select.split(',') : { all: true }; //Comma seprated fileds list
-        var includeOption = reqParams['select'] ? generateInclude(select, self.modelMap, self.model.getTableName()) : getIncludeOptions(self.complexLevel);
-        // console.log("IncludeOption is " + JSON.stringify(includeOption, null, 4));
-        var attributes = reqParams['select'] ? includeOption['attributes'] : select;
-        this.model.findOne({ where: { id: reqParams['id'] }, attributes: attributes, include: includeOption['include'] }).then(results => {
+        var select = {all:true};
+        var includeOption = getIncludeOptions(self.complexLevel)
+        if(reqParams['select']){
+            var selectArray = reqParams.select.split(',');
+            var excludeFlag = true;
+            selectArray.forEach(el=>{
+                if(el.substr(0,1) != '-'){
+                    excludeFlag = false;
+                }
+            })
+            includeOption = generateInclude(selectArray, self.modelMap, self.model.getTableName(), excludeFlag);
+            select = includeOption['attributes'];
+        }
+        this.model.findOne({ where: { id: reqParams['id'] }, attributes: select, include: includeOption['include'] }).then(results => {
             console.log("Results: " + JSON.stringify(results, null, 4));
             return self.Okay(res, self.getResponseObject(results));
         },err =>{
