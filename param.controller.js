@@ -7,17 +7,15 @@ var CrudController = require('./crud.controller');
 
 /**
  * Constructor function for ParamController.
- * @classdesc Controller for basic CRUD operations on mongoose models.
- * Using a route parameter object (request property) if possible.
- * The parameter name is passed as the third argument.
+ * @classdesc Controller for basic CRUD operations on sequelize models.
  * @constructor
  * @inherits CrudController
  * @param {Object} model - The mongoose model to operate on
  * @param {String} [idName] - The name of the id request parameter to use,
  * defaults to the lowercase model name with 'Id' appended.
- * @param {String} [paramName] - The name of the request property to use,
- * defaults to the lowercase model name with 'Param' appended.
  * @param {Object} logger - logger instance
+ * @param {String} complexLevel - Max nested level of schema,
+ * @param {Map} modelMap - Map of all Sequelize Model mapped to its tableName.
  */
 function ParamController(model, idName, logger, complexLevel, modelMap) {
     var modelName = idName.toLowerCase();
