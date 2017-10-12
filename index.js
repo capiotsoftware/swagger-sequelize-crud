@@ -77,8 +77,9 @@ function generateSequelize(sequelize, tableName, obj) {
   return Promise.all(promises)
     .then(_ => sequelize.authenticate())
     .then(_ => {
-      console.log("Creating Model for ... " + require('util').inspect(columns, { depth: null }));
       var c2 = getSequelizeDefinition(columns);
+      console.log("Creating Model for "+ tableName + " with fields... \n" + require('util').inspect(c2, { depth: null }));
+      // console.log("columns are ",c2);
       var model = sequelize.define(tableName, c2, { freezeTableName: true, paranoid: true });
       modelMap[tableName] = model;
       childModels.forEach(el => {
@@ -98,19 +99,21 @@ function generateSequelize(sequelize, tableName, obj) {
     });
 
 }
-var checkDefined = (object, key) => typeof object[key] !== "undefined";
+var checkDefined = (object, key) => { return (typeof object[key] !== 'undefined')};
 
 function getSequelizeDefinition(definition) {
   var column = {};
   Object.keys(definition).forEach(el => {
     var properties = {};
     properties.type = getSequelizeEquivalentType(definition[el])
-    if (checkDefined(el, "required")) {
+    if (checkDefined(definition[el], "required")) {
       properties.allowNull = !definition[el]["required"];
-    } if (checkDefined(el, "unique")) {
+    } if (checkDefined(definition[el], "unique")) {
       properties.unique = definition[el]["unique"];
-    } if (checkDefined(el, "default")) {
+    } if (checkDefined(definition[el], "default")) {
       properties.defaultValue = definition[el]["default"];
+    } if (checkDefined(definition[el], "validate")) {
+      properties.validate = definition[el]["validate"];
     }
     column[el] = properties;
   });
