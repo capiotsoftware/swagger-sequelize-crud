@@ -70,10 +70,10 @@ function addStruct(parentStruct, child) {
 function generateInclude(select, modelMap, rootTableName, excludeFlag) {
     var struct = {};
     var newSelect = [];
-    if(excludeFlag)
-     newSelect = select.filter(el => el.split('')[0] === "-").map(el => el.substring(1,el.length));
-    else 
-     newSelect = select.filter(el => el.split('')[0] !== "-").map(el => el.split('')[0] === '+'?el.substring(1,el.length):el)
+    if (excludeFlag)
+        newSelect = select.filter(el => el.split('')[0] === "-").map(el => el.substring(1, el.length));
+    else
+        newSelect = select.filter(el => el.split('')[0] !== "-").map(el => el.split('')[0] === '+' ? el.substring(1, el.length) : el)
     newSelect.forEach(el => {
         addStruct(struct, el);
     })
@@ -85,7 +85,7 @@ function generateInclude(select, modelMap, rootTableName, excludeFlag) {
 
 function generateIncludeRecursive(modelMap, struct, model, modelOption, excludeFlag) {
     var includeObj = null;
-    if(modelMap[model] != null){
+    if (modelMap[model] != null) {
         var attrArray = [], includeArray = [];
         includeObj = {};
         if (modelOption) {
@@ -96,15 +96,15 @@ function generateIncludeRecursive(modelMap, struct, model, modelOption, excludeF
         var validAttributes = Object.keys(modelMap[model].rawAttributes);
         Object.keys(struct).forEach(el => {
             if (struct[el] == true) {
-                if(validAttributes.indexOf(el)!=-1)
+                if (validAttributes.indexOf(el) != -1)
                     attrArray.push(el);
             } else if (typeof struct[el] == 'object') {
-                var singleInclude = generateIncludeRecursive(modelMap, struct[el], el, true, excludeFlag);                
-                if(singleInclude!=null)
+                var singleInclude = generateIncludeRecursive(modelMap, struct[el], el, true, excludeFlag);
+                if (singleInclude != null)
                     includeArray.push(singleInclude);
             }
         })
-        includeObj['attributes'] = excludeFlag?{exclude:attrArray}:attrArray;  
+        includeObj['attributes'] = excludeFlag ? { exclude: attrArray } : attrArray;
         includeArray.length == 0 ? null : includeObj['include'] = includeArray;
     }
     return includeObj;
@@ -112,18 +112,54 @@ function generateIncludeRecursive(modelMap, struct, model, modelOption, excludeF
 
 
 
-var updatePromises = [];
-function updateTable(result, updateBody) {
-    console.log("Result object is " + JSON.stringify(result, null, 4));
+//var updatePromises = [];
+function updateTable(result, updateBody, updatePromises) {
+    // console.log("Result object is " + JSON.stringify(result, null, 4));
     var updateFields = {};
     Object.keys(updateBody).forEach(el => {
-        if (typeof updateBody[el] == 'object') {
-            updateTable(result[el], updateBody[el]);
+        if (updateBody[el] instanceof Array) {
+            if (typeof updateBody[el][0] != 'object') {
+                if (typeof result[el] != 'undefined') {
+                    result[el].forEach(ele => {
+                        ele.destroy();
+                    })
+                } else {
+                    updatePromises.push(new Promise((res, rej)=>{
+                        rej(new Error(el + " key does not exist"));    
+                    }))
+                    return;
+                }
+                var methodName = "create" + el.substr(0, 1).toUpperCase() + el.substr(1);
+                if (typeof result[methodName] === 'function') {
+                    updateBody[el].forEach(ele => {
+                        updatePromises.push(result["create" + el.substr(0, 1).toUpperCase() + el.substr(1)]({ value1: ele }));
+                    })
+                } else {
+                    updatePromises.push(new Promise((res, rej)=>{
+                        rej(new Error("Could not update table. Function " + methodName + " does not exist"));    
+                    }));
+                }
+            } else {
+                updateBody[el].forEach(ele => {
+                    if (ele['id']) {
+                        result[el].forEach(resultEle => {
+                            if (resultEle['id'] === ele['id']) {
+                                updatePromises.push(resultEle.updateAttributes(ele));
+                            }
+                        })
+                    } else {
+                        updatePromises.push(new Error('Need id to update complex Array'));
+                    }
+                })
+            }
+        }
+        else if (typeof updateBody[el] == 'object') {
+            updateTable(result[el], updateBody[el], updatePromises);
         } else {
             updateFields[el] = updateBody[el];
         }
     })
-    console.log("Fields to be updated are " + JSON.stringify(updateFields, null, 4));
+    // console.log("Fields to be updated are " + JSON.stringify(updateFields, null, 4));
     updatePromises.push(result.updateAttributes(updateFields));
 }
 function getDepthOfObject(object) {
@@ -352,13 +388,13 @@ CrudController.prototype = {
         var count = reqParams['count'] ? reqParams.count : 10;
         var skip = count * (page - 1);
         var self = this;
-        var select = {all:true};
+        var select = { all: true };
         var includeOption = getIncludeOptions(self.complexLevel)
-        if(reqParams['select']){
+        if (reqParams['select']) {
             var selectArray = reqParams.select.split(',');
             var excludeFlag = true;
-            selectArray.forEach(el=>{
-                if(el.substr(0,1) != '-'){
+            selectArray.forEach(el => {
+                if (el.substr(0, 1) != '-') {
                     excludeFlag = false;
                 }
             })
@@ -368,15 +404,15 @@ CrudController.prototype = {
         // console.log("IncludeOption is "+JSON.stringify(includeOption, null ,4));
         insertWhere(self.modelMap, includeOption, JSON.parse(filter), self.model.getTableName());
         var baseWhere = {};
-        if(typeof includeOption['where'] != 'undefined'){
+        if (typeof includeOption['where'] != 'undefined') {
             baseWhere = includeOption['where'];
         }
         // console.log("Include option is "+JSON.stringify(includeOption, null, 4));
         this.model.findAll({ limit: count, offset: skip, attributes: select, order: sort, include: includeOption['include'], where: baseWhere }).then(results => {
             console.log("results are " + JSON.stringify(results));
             return self.Okay(res, results);
-        },err =>{
-            return self.Error(res,err);
+        }, err => {
+            return self.Error(res, err);
         });
     },
     /**
@@ -390,13 +426,13 @@ CrudController.prototype = {
         var self = this;
         console.log("Inside show");
         var reqParams = params.map(req);
-        var select = {all:true};
+        var select = { all: true };
         var includeOption = getIncludeOptions(self.complexLevel)
-        if(reqParams['select']){
+        if (reqParams['select']) {
             var selectArray = reqParams.select.split(',');
             var excludeFlag = true;
-            selectArray.forEach(el=>{
-                if(el.substr(0,1) != '-'){
+            selectArray.forEach(el => {
+                if (el.substr(0, 1) != '-') {
                     excludeFlag = false;
                 }
             })
@@ -406,8 +442,8 @@ CrudController.prototype = {
         this.model.findOne({ where: { id: reqParams['id'] }, attributes: select, include: includeOption['include'] }).then(results => {
             console.log("Results: " + JSON.stringify(results, null, 4));
             return self.Okay(res, self.getResponseObject(results));
-        },err =>{
-            return self.Error(res,err);
+        }, err => {
+            return self.Error(res, err);
         });
     },
 
@@ -424,7 +460,7 @@ CrudController.prototype = {
         var body = params.map(req)[payload];
         var tableName = this.model.getTableName();
         var sequelizeBody = convertToSequelizeCreate(tableName, body);
-        console.log("Sequelize Body is....\n" + JSON.stringify(sequelizeBody, null, 4));
+        // console.log("Sequelize Body is....\n" + JSON.stringify(sequelizeBody, null, 4));
         var includeOption = getIncludeOptions(self.complexLevel);
         this.model.create(sequelizeBody, includeOption).then(data => {
             var returnObj = data.get({
@@ -550,6 +586,7 @@ CrudController.prototype = {
         var reqParams = params.map(req);
         var bodyIn = 'data';
         var body = reqParams[bodyIn];
+        // updatePromises = [];
         if (body.id) {
             delete req.body.id;
         }
@@ -561,32 +598,39 @@ CrudController.prototype = {
         var includeOption = getIncludeOptions(self.complexLevel);
         var oldValues = {};
         var newValues = {};
+        var updatePromises = [];
         this.model.findOne({
-            where: { id: reqParams['id'] }, include: includeOption['include']
-        }).then(result => {
-            oldValues = result;
-            console.log("Old Values " + JSON.stringify(oldValues));
-            updateTable(result, bodyData);
-            Promise.all(updatePromises).then(() => {
-                self.model.findOne({
-                    where: { id: reqParams['id'] }, include: includeOption['include']
-                }).then(updatedResult => {
-                    newValues = updatedResult;
-                    var logObject = {
-                        'operation': 'update',
-                        'user': req.user ? req.user.username : req.headers['masterName'],
-                        'originalValues': JSON.stringify(oldValues),
-                        '_id': oldValues.id,
-                        'newValues': updatedResult,
-                        'timestamp': new Date()
-                    };
-                    self.logger.audit(JSON.stringify(logObject));
-                    return self.Okay(res, self.getResponseObject(updatedResult));
-                })
-            },err =>{
-                return self.Error(res,err);
+                where: { id: reqParams['id'] }, include: includeOption['include']
             })
-        });
+            .then(result => {
+                oldValues = result;
+                // console.log("Old Values ", oldValues);
+                updateTable(result, bodyData, updatePromises);
+                return Promise.all(updatePromises)
+            })
+            .then((resolvedPromises) => {
+                return self.model.findOne({
+                    where: { id: reqParams['id'] }, include: includeOption['include']
+                })
+            })
+            .then(updatedResult => {
+                // console.log("Updated Result ", updatedResult);
+                newValues = updatedResult;
+                var logObject = {
+                    'operation': 'update',
+                    'user': req.user ? req.user.username : req.headers['masterName'],
+                    'originalValues': oldValues,
+                    '_id': oldValues.id,
+                    'newValues': updatedResult,
+                    'timestamp': new Date()
+                };
+                self.logger.audit(JSON.stringify(logObject, null, 4));
+                return self.Okay(res, self.getResponseObject(updatedResult));
+            })
+            .catch(err => {
+                self.logger.error(err);
+                return self.Error(res, err);
+            })
     },
 
     _customizer: function (objValue, srcValue) {
