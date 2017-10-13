@@ -4,7 +4,7 @@ var _ = require('lodash');
 var BaseController = require('./base.controller');
 var params = require('./swagger.params.map');
 const requestLib = require('request');
-var result = {};
+// var result = {};
 
 /**
 * Constructor function for CrudController.
@@ -132,7 +132,7 @@ function updateTable(result, updateBody, updatePromises) {
                 var methodName = "create" + el.substr(0, 1).toUpperCase() + el.substr(1);
                 if (typeof result[methodName] === 'function') {
                     updateBody[el].forEach(ele => {
-                        updatePromises.push(result["create" + el.substr(0, 1).toUpperCase() + el.substr(1)]({ value1: ele }));
+                        updatePromises.push(result["create" + el.substr(0, 1).toUpperCase() + el.substr(1)]({ value: ele }));
                     })
                 } else {
                     updatePromises.push(new Promise((res, rej)=>{
@@ -148,7 +148,12 @@ function updateTable(result, updateBody, updatePromises) {
                             }
                         })
                     } else {
-                        updatePromises.push(new Error('Need id to update complex Array'));
+                        // console.log("New Error no id complex object");
+                        
+                        updatePromises.push(new Promise((res, rej)=>{
+                            rej(new Error('Need id to update complex Array'));    
+                        }));
+                        return;
                     }
                 })
             }
@@ -462,7 +467,8 @@ CrudController.prototype = {
         var sequelizeBody = convertToSequelizeCreate(tableName, body);
         // console.log("Sequelize Body is....\n" + JSON.stringify(sequelizeBody, null, 4));
         var includeOption = getIncludeOptions(self.complexLevel);
-        this.model.create(sequelizeBody, includeOption).then(data => {
+        var ins = this.model.build(sequelizeBody, includeOption)
+        ins.save().then(data => {
             var returnObj = data.get({
                 plain: true
             });
@@ -475,6 +481,7 @@ CrudController.prototype = {
             self.logger.audit(JSON.stringify(logObject));
             return self.Okay(res, self.getResponseObject(returnObj));
         }, err => {
+            ins.destroy({force:true});
             return self.Error(res, err);
         });
     },
