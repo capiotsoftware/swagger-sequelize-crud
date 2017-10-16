@@ -57,3 +57,30 @@ module.exports = exports;
 * updatedAt : Type Date. The last updated time of the tuple.
 * deletedAt : Type Date. This is null by default. The value is updated when Delete operation is called by crud.
 
+## APIs
+* GET : To fetch all/single document. 
+     * Query params:
+        * select: comma separated list of attributes to be fetched. Returns all attribute if not provided. To exclude attributes provide list with '-' sign. Eg: -id,-name. To include or exclude a complex feild give '.'  separated feild. Eg: address.line1, address.* .
+        * sort: comma separated attributes.
+        * filter: json object to filter document. Sample json: ```{
+    "$where": {
+        "name": "Neamen",
+        "template_id": "123"
+    },
+    "contact_id": {
+        "$where": {
+            "id": {
+                "$gt": 1
+            },
+            "value": "234"
+        }
+    }
+}```
+filter should be always inside $where key. For more options in filter refer to http://docs.sequelizejs.com/manual/tutorial/querying.html#where
+        * page: page number of the ducument.
+        * count: number of records in a page.
+*   POST: To create a document.
+*   PUT: To update a document.
+*   DELETE: to delete a document.
+
+ 
