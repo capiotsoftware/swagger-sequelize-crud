@@ -1,5 +1,5 @@
 # swagger-sequelize-crud
-[![Build Status](https://travis-ci.org/capiotsoftware/swagger-mongoose-crud.svg?branch=master)](https://travis-ci.org/capiotsoftware/swagger-mongoose-crud)
+
 
 A Simple wrapper for Swagger based SQL CRUD operation. This plugin is a modfied version of the Mongoose CRUD operation introducted by [Micheal Krone](https://github.com/michaelkrone).
 
