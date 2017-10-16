@@ -94,17 +94,30 @@ function generateIncludeRecursive(modelMap, struct, model, modelOption, excludeF
             // console.log("Attributes of model are "+JSON.stringify(,null,4));
         }
         var validAttributes = Object.keys(modelMap[model].rawAttributes);
+        var allFlag = false;
         Object.keys(struct).forEach(el => {
+
             if (struct[el] == true) {
                 if (validAttributes.indexOf(el) != -1)
                     attrArray.push(el);
+                else if (el == '*') {
+                    console.log("found *");
+                    allFlag = true;
+                }
             } else if (typeof struct[el] == 'object') {
                 var singleInclude = generateIncludeRecursive(modelMap, struct[el], el, true, excludeFlag);
                 if (singleInclude != null)
                     includeArray.push(singleInclude);
             }
         })
-        includeObj['attributes'] = excludeFlag ? { exclude: attrArray } : attrArray;
+        if (allFlag) {
+            if (excludeFlag) { console.log("all exclude"); includeObj['attributes'] = [] }
+            else includeObj['attributes'] = { all: true }
+        } else {
+            if (excludeFlag) includeObj['attributes'] = { exclude: attrArray }
+            else includeObj['attributes'] = attrArray
+        }
+        // includeObj['attributes'] = excludeFlag ? { exclude: attrArray } : attrArray;
         includeArray.length == 0 ? null : includeObj['include'] = includeArray;
     }
     return includeObj;
@@ -124,8 +137,8 @@ function updateTable(result, updateBody, updatePromises) {
                         ele.destroy();
                     })
                 } else {
-                    updatePromises.push(new Promise((res, rej)=>{
-                        rej(new Error(el + " key does not exist"));    
+                    updatePromises.push(new Promise((res, rej) => {
+                        rej(new Error(el + " key does not exist"));
                     }))
                     return;
                 }
@@ -135,8 +148,8 @@ function updateTable(result, updateBody, updatePromises) {
                         updatePromises.push(result["create" + el.substr(0, 1).toUpperCase() + el.substr(1)]({ value: ele }));
                     })
                 } else {
-                    updatePromises.push(new Promise((res, rej)=>{
-                        rej(new Error("Could not update table. Function " + methodName + " does not exist"));    
+                    updatePromises.push(new Promise((res, rej) => {
+                        rej(new Error("Could not update table. Function " + methodName + " does not exist"));
                     }));
                 }
             } else {
@@ -149,9 +162,9 @@ function updateTable(result, updateBody, updatePromises) {
                         })
                     } else {
                         // console.log("New Error no id complex object");
-                        
-                        updatePromises.push(new Promise((res, rej)=>{
-                            rej(new Error('Need id to update complex Array'));    
+
+                        updatePromises.push(new Promise((res, rej) => {
+                            rej(new Error('Need id to update complex Array'));
                         }));
                         return;
                     }
@@ -406,6 +419,7 @@ CrudController.prototype = {
             includeOption = generateInclude(selectArray, self.modelMap, self.model.getTableName(), excludeFlag);
             select = includeOption['attributes'];
         }
+        console.log("Include ", JSON.stringify(includeOption, null, 4));
         // console.log("IncludeOption is "+JSON.stringify(includeOption, null ,4));
         insertWhere(self.modelMap, includeOption, JSON.parse(filter), self.model.getTableName());
         var baseWhere = {};
@@ -481,7 +495,7 @@ CrudController.prototype = {
             self.logger.audit(JSON.stringify(logObject));
             return self.Okay(res, self.getResponseObject(returnObj));
         }, err => {
-            ins.destroy({force:true});
+            ins.destroy({ force: true });
             return self.Error(res, err);
         });
     },
@@ -607,8 +621,8 @@ CrudController.prototype = {
         var newValues = {};
         var updatePromises = [];
         this.model.findOne({
-                where: { id: reqParams['id'] }, include: includeOption['include']
-            })
+            where: { id: reqParams['id'] }, include: includeOption['include']
+        })
             .then(result => {
                 oldValues = result;
                 // console.log("Old Values ", oldValues);
