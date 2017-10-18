@@ -17,17 +17,23 @@ const Sequelize = require("sequelize");
 * @param {String} modelName - Model name to which data needs to be populated.
 * @param {Object} options - optional options object. Takes 2 values - logger and collectionName
 */
-function SequelizeModel(sequelize, definition, modelName, options) {
+function SequelizeModel(sequelize, definition, modelName, options, hooks) {
   logger = options.logger ? options.logger : logger;
   var self = this;
   var complexLevel = getDepthOfObject(definition) - 1;
   generateSequelize(sequelize, modelName, definition)
     .then(model => {
       self.model = model;
+      hooks.forEach(hookObj=>{
+        self.model.addHook(hookObj.event, hookObj.hookName, hookObj.func);
+      })
       sequelize.sync()
     })
     .then(() => {
       ParamController.call(self, self.model, modelName, logger, complexLevel, modelMap);
+    })
+    .catch(err => {
+      console.log("Something Messed up........ ", err);
     });
 
   this.index = this._index.bind(this);
@@ -78,17 +84,17 @@ function generateSequelize(sequelize, tableName, obj) {
     .then(_ => sequelize.authenticate())
     .then(_ => {
       var c2 = getSequelizeDefinition(columns);
-      console.log("Creating Model for "+ tableName + " with fields... \n" + require('util').inspect(c2, { depth: null }));
+      console.log("Creating Model for " + tableName + " with fields... \n" + require('util').inspect(c2, { depth: null }));
       // console.log("columns are ",c2);
       var model = sequelize.define(tableName, c2, { freezeTableName: true, paranoid: true });
       modelMap[tableName] = model;
       childModels.forEach(el => {
         if (el['relationship'] == 'many') {
-          model.hasMany(el['model'], { as: el['name'], onDelete: 'CASCADE', hooks: true, constraints:true });
+          model.hasMany(el['model'], { as: el['name'], onDelete: 'CASCADE', hooks: true, constraints: true });
           // el['model'].belongsTo(model);
         }
         else if (el['relationship'] == 'one') {
-          model.hasOne(el['model'],{onDelete: 'cascade', hooks: true, constraints:true});
+          model.hasOne(el['model'], { onDelete: 'cascade', hooks: true, constraints: true });
           // el['model'].belongsTo(model);
         }
       })
@@ -99,7 +105,7 @@ function generateSequelize(sequelize, tableName, obj) {
     });
 
 }
-var checkDefined = (object, key) => { return (typeof object[key] !== 'undefined')};
+var checkDefined = (object, key) => { return (typeof object[key] !== 'undefined') };
 
 function getSequelizeDefinition(definition) {
   var column = {};
@@ -142,7 +148,7 @@ function getSequelizeEquivalentType(json) {
 function getDepthOfObject(object) {
   var level = 1;
   Object.keys(object).forEach(key => {
-    if (typeof object[key] == 'object' && object[key]!=null) {
+    if (typeof object[key] == 'object' && object[key] != null) {
       var depth = getDepthOfObject(object[key]) + 1;
       level = Math.max(depth, level);
     }
