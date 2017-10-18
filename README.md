@@ -55,6 +55,7 @@ module.exports = exports;
 * createdAt : Type Date. The time of creation of the tuple.
 * updatedAt : Type Date. The last updated time of the tuple.
 * deletedAt : Type Date. This is null by default. The value is updated when Delete operation is called by crud.
+* id: Type integer. This will be unique and primary key of the model.
 
 ## APIs
 * GET : To fetch all/single document. 
