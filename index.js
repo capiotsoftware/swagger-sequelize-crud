@@ -58,7 +58,7 @@ function generateSequelize(sequelize, tableName, obj) {
   var promises = [];
   Object.keys(obj).forEach(el => {
     if (typeof obj[el] == 'string') {
-      columns.value = obj;
+      columns['#value'] = obj;
       // console.log("Table "+tableName+" Column "+"Value");
     }
     else if (obj[el] instanceof Array) {
