@@ -55,6 +55,20 @@ function insertWhere(modelMap, includeStruct, whereStruct, modelName) {
     })
 }
 
+function unwrapSimpleArray(obj) {
+    Object.keys(obj).forEach(el => {
+        // console.log('el ',el);
+        if (obj[el] instanceof Array) {
+            var valArray = obj[el].map(_ => typeof _['#value'] == 'undefined' ? unwrapSimpleArray(_) : _['#value']);
+            // console.log('valArray ', valArray);
+            obj[el] = valArray;
+        } else if (obj[el] != null && typeof obj[el] === 'object') {
+            unwrapSimpleArray(obj[el])
+        }
+    })
+    return obj;
+}
+
 function addStruct(parentStruct, child) {
     var childArray = child.split('.');
     if (childArray.length == 1) {
@@ -101,7 +115,7 @@ function generateIncludeRecursive(modelMap, struct, model, modelOption, excludeF
                 if (validAttributes.indexOf(el) != -1)
                     attrArray.push(el);
                 else if (el == '*') {
-                    console.log("found *");
+                    // console.log("found *");
                     allFlag = true;
                 }
             } else if (typeof struct[el] == 'object') {
@@ -145,7 +159,7 @@ function updateTable(result, updateBody, updatePromises) {
                 var methodName = "create" + el.substr(0, 1).toUpperCase() + el.substr(1);
                 if (typeof result[methodName] === 'function') {
                     updateBody[el].forEach(ele => {
-                        updatePromises.push(result["create" + el.substr(0, 1).toUpperCase() + el.substr(1)]({ value: ele }));
+                        updatePromises.push(result["create" + el.substr(0, 1).toUpperCase() + el.substr(1)]({ '#value': ele }));
                     })
                 } else {
                     updatePromises.push(new Promise((res, rej) => {
@@ -207,7 +221,7 @@ function convertToSequelizeCreate(key, json) {
         if (json[el] instanceof Array) {
             sequelizeCreateJson[newKey] = [];
             json[el].forEach(data => {
-                (typeof data == 'object') ? sequelizeCreateJson[newKey].push(convertToSequelizeCreate(newKey, data)) : sequelizeCreateJson[newKey].push({ value: data });
+                (typeof data == 'object') ? sequelizeCreateJson[newKey].push(convertToSequelizeCreate(newKey, data)) : sequelizeCreateJson[newKey].push({ '#value': data });
             })
         }
         else if (typeof json[el] == 'object') {
@@ -427,9 +441,12 @@ CrudController.prototype = {
             baseWhere = includeOption['where'];
         }
         // console.log("Include option is "+JSON.stringify(includeOption, null, 4));
+        // console.log("sort is ", sort);
         this.model.findAll({ limit: count, offset: skip, attributes: select, order: sort, include: includeOption['include'], where: baseWhere }).then(results => {
-            console.log("results are " + JSON.stringify(results));
-            return self.Okay(res, results);
+            var resObj = results.map( (r) => ( r.toJSON() ) )
+            console.log("results are ", resObj);
+            unwrapSimpleArray(resObj);
+            return self.Okay(res, resObj);
         }, err => {
             return self.Error(res, err);
         });
@@ -459,8 +476,13 @@ CrudController.prototype = {
             select = includeOption['attributes'];
         }
         this.model.findOne({ where: { id: reqParams['id'] }, attributes: select, include: includeOption['include'] }).then(results => {
-            console.log("Results: " + JSON.stringify(results, null, 4));
-            return self.Okay(res, self.getResponseObject(results));
+            // var resObj = JSON.parse(JSON.stringify(results, null, 4));
+            var resObj = results.get({
+                plain: true
+            });
+            console.log("results are ", resObj);
+            unwrapSimpleArray(resObj);
+            return self.Okay(res, self.getResponseObject(resObj));
         }, err => {
             return self.Error(res, err);
         });
@@ -486,6 +508,7 @@ CrudController.prototype = {
             var returnObj = data.get({
                 plain: true
             });
+            unwrapSimpleArray(returnObj)
             var logObject = {
                 'operation': 'Create',
                 'user': req.user ? req.user.username : req.headers['masterName'],
@@ -625,28 +648,34 @@ CrudController.prototype = {
         })
             .then(result => {
                 oldValues = result;
-                // console.log("Old Values ", oldValues);
+                result.changed('updatedAt', true)
+                updatePromises.push(result.save());
                 updateTable(result, bodyData, updatePromises);
                 return Promise.all(updatePromises)
             })
-            .then((resolvedPromises) => {
+            .then((resolvedPromises) => {                
                 return self.model.findOne({
                     where: { id: reqParams['id'] }, include: includeOption['include']
                 })
             })
             .then(updatedResult => {
-                // console.log("Updated Result ", updatedResult);
-                newValues = updatedResult;
+                // var resObj = JSON.parse(JSON.stringify(updatedResult, null, 4));
+                var resObj = updatedResult.get({
+                    plain: true
+                });
+                console.log("Updated Result ", resObj);
+                newValues = resObj;
+                unwrapSimpleArray(resObj);
                 var logObject = {
                     'operation': 'update',
                     'user': req.user ? req.user.username : req.headers['masterName'],
                     'originalValues': oldValues,
                     '_id': oldValues.id,
-                    'newValues': updatedResult,
+                    'newValues': resObj,
                     'timestamp': new Date()
                 };
                 self.logger.audit(JSON.stringify(logObject, null, 4));
-                return self.Okay(res, self.getResponseObject(updatedResult));
+                return self.Okay(res, resObj);
             })
             .catch(err => {
                 self.logger.error(err);
@@ -696,7 +725,7 @@ CrudController.prototype = {
                 self.logger.audit(JSON.stringify(logObject));
                 var reqData = {};
 
-                result = callTwinComplete(reqParams['id'], res, "delete", collectionName);
+                // result = callTwinComplete(reqParams['id'], res, "delete", collectionName);
                 return self.Okay(res, {});
             });
         });
