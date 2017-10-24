@@ -18,7 +18,7 @@ npm install https://bitbucket.org/capiot/swagger-sequelize-crud.git --save
 ## Usage 
 ```javascript
 const Sequelize = require('sequelize');
-const SMCrud = require("swagger-sequelize-crud");
+const SSCrud = require("swagger-sequelize-crud");
 //In your controller, simply expose the following
 var sequelize = new Sequelize("dbUrl,options);
 //db needs to be created before using sequelize object
@@ -28,10 +28,9 @@ var options = {
  collectionName: "name of your Table",
  logger: "your logger object"
 }
-
-var crud = new SMCrud(sequelize, definition, modelName, options);
+var hooks = []; //array of hook object. Hook object should contain event, hookName and func; List of event supported can be found in http://docs.sequelizejs.com/manual/tutorial/hooks.html; func is a function which takes data object and option as argument and may return a promise. 
+var crud = new SSCrud(sequelize, definition, modelName, options, hooks);
 var exports = {};
-
 //Takes all parameters for creating an entry
 exports.create = crud.create; 
 
@@ -56,6 +55,7 @@ module.exports = exports;
 * createdAt : Type Date. The time of creation of the tuple.
 * updatedAt : Type Date. The last updated time of the tuple.
 * deletedAt : Type Date. This is null by default. The value is updated when Delete operation is called by crud.
+* id: Type integer. This will be unique and primary key of the model.
 
 ## APIs
 * GET : To fetch all/single document. 
