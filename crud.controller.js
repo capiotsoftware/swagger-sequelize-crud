@@ -178,7 +178,7 @@ function updateTable(result, updateBody, updatePromises) {
                         // console.log("New Error no id complex object");
 
                         updatePromises.push(new Promise((res, rej) => {
-                            rej(new Error('Need id to update complex Array'));
+                            rej(new Error('Need id to update '+el));
                         }));
                         return;
                     }
