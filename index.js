@@ -24,9 +24,11 @@ function SequelizeModel(sequelize, definition, modelName, options, hooks) {
   generateSequelize(sequelize, modelName, definition)
     .then(model => {
       self.model = model;
-      hooks.forEach(hookObj=>{
-        self.model.addHook(hookObj.event, hookObj.hookName, hookObj.func);
-      })
+      if(typeof hooks !== 'undefined'){
+        hooks.forEach(hookObj=>{
+          self.model.addHook(hookObj.event, hookObj.hookName, hookObj.func);
+        })
+      }
       sequelize.sync()
     })
     .then(() => {
