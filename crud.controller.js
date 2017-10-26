@@ -477,6 +477,9 @@ CrudController.prototype = {
         }
         this.model.findOne({ where: { id: reqParams['id'] }, attributes: select, include: includeOption['include'] }).then(results => {
             // var resObj = JSON.parse(JSON.stringify(results, null, 4));
+            if(results === null){
+                return self.Error(res, new Error("No record found"))
+            }
             var resObj = results.get({
                 plain: true
             });
@@ -647,6 +650,9 @@ CrudController.prototype = {
             where: { id: reqParams['id'] }, include: includeOption['include']
         })
             .then(result => {
+                if(result === null){
+                    return Promise.reject(new Error("No record found"))
+                }
                 oldValues = result;
                 result.changed('updatedAt', true)
                 updatePromises.push(result.save());
@@ -660,6 +666,9 @@ CrudController.prototype = {
             })
             .then(updatedResult => {
                 // var resObj = JSON.parse(JSON.stringify(updatedResult, null, 4));
+                if(result === null){
+                    return Promise.reject(new Error("No record found"))
+                }
                 var resObj = updatedResult.get({
                     plain: true
                 });
@@ -735,6 +744,9 @@ CrudController.prototype = {
         var reqParams = params.map(req);
         var self = this;
         this.model.findOne({ where: { id: reqParams['id'] } }).then(result => {
+            if(result === null){
+                return self.Error(res, new Error("No record found"));
+            }
             result.destroy().then(rowsDeleted => {
                 var logObject = {
                     'operation': 'Delete',
