@@ -69,15 +69,57 @@ function unwrapSimpleArray(obj) {
     return obj;
 }
 
-function addStruct(parentStruct, child) {
+function wrapSeqSchema(json, key) {
+    var sequelizeJson = {};
+    Object.keys(json).forEach(el => {
+        var newKey = key+"#"+el;
+        if(el === '$where'){
+            sequelizeJson[el] = json[el];
+        }
+        else if (json[el] instanceof Array) {
+            sequelizeJson[newKey] = [];
+            json[el].forEach(data => {
+                (typeof data == 'object') ? sequelizeJson[newKey].push(wrapSeqSchema(data, newKey)) : sequelizeJson[newKey].push(data);
+            })
+        }
+        else if (typeof json[el] == 'object') {
+            sequelizeJson[newKey] = wrapSeqSchema(json[el], newKey);
+        }
+        else {
+            sequelizeJson[el] = json[el];
+        }
+    })
+    return sequelizeJson;
+}
+
+function unwrapSeqSchema(obj){
+    Object.keys(obj).forEach(el=>{        
+        if(obj[el] instanceof Array && obj[el][0] && typeof obj[el][0] === 'object'){
+            obj[el].forEach(subObj=>{
+                unwrapSeqSchema(subObj)
+            })
+        }
+        else if(obj[el] != null && typeof obj[el] === 'object'){
+            unwrapSeqSchema(obj[el])
+        }
+        var elArray = el.split("#");
+        var newKey = elArray[elArray.length - 1];
+        obj[newKey] = obj[el];
+        if(elArray.length>1)
+            delete obj[el];
+    })
+}
+
+function addStruct(parentStruct, child, key) {
     var childArray = child.split('.');
     if (childArray.length == 1) {
         parentStruct[child] = true;
     } else {
+        var newKey = key+'#'+childArray[0]; 
         // console.log('Parent struct is '+parentStruct[childArray[0]]);
-        if (typeof parentStruct[childArray[0]] == 'undefined')
-            parentStruct[childArray[0]] = {};
-        addStruct(parentStruct[childArray[0]], child.substr(child.indexOf('.') + 1));
+        if (typeof parentStruct[newKey] == 'undefined')
+            parentStruct[newKey] = {};
+        addStruct(parentStruct[newKey], child.substr(child.indexOf('.') + 1), newKey);
     }
 }
 
@@ -89,7 +131,7 @@ function generateInclude(select, modelMap, rootTableName, excludeFlag) {
     else
         newSelect = select.filter(el => el.split('')[0] !== "-").map(el => el.split('')[0] === '+' ? el.substring(1, el.length) : el)
     newSelect.forEach(el => {
-        addStruct(struct, el);
+        addStruct(struct, el, rootTableName);
     })
     // console.log("struct is " + JSON.stringify(struct, null, 4));
     var includeOption = generateIncludeRecursive(modelMap, struct, rootTableName, false, excludeFlag);
@@ -110,7 +152,6 @@ function generateIncludeRecursive(modelMap, struct, model, modelOption, excludeF
         var validAttributes = Object.keys(modelMap[model].rawAttributes);
         var allFlag = false;
         Object.keys(struct).forEach(el => {
-
             if (struct[el] == true) {
                 if (validAttributes.indexOf(el) != -1)
                     attrArray.push(el);
@@ -143,9 +184,10 @@ function generateIncludeRecursive(modelMap, struct, model, modelOption, excludeF
 function updateTable(result, updateBody, updatePromises) {
     // console.log("Result object is " + JSON.stringify(result, null, 4));
     var updateFields = {};
+    console.log("wrap update body", updateBody);
     Object.keys(updateBody).forEach(el => {
         if (updateBody[el] instanceof Array) {
-            if (typeof updateBody[el][0] != 'object') {
+            if (updateBody[el][0] && typeof updateBody[el][0] != 'object') {
                 if (typeof result[el] != 'undefined') {
                     result[el].forEach(ele => {
                         ele.destroy();
@@ -217,7 +259,7 @@ function getIncludeOptions(depth) {
 function convertToSequelizeCreate(key, json) {
     var sequelizeCreateJson = {};
     Object.keys(json).forEach(el => {
-        var newKey = el;
+        var newKey = key+"#"+el;
         if (json[el] instanceof Array) {
             sequelizeCreateJson[newKey] = [];
             json[el].forEach(data => {
@@ -435,7 +477,9 @@ CrudController.prototype = {
         }
         console.log("Include ", JSON.stringify(includeOption, null, 4));
         // console.log("IncludeOption is "+JSON.stringify(includeOption, null ,4));
-        insertWhere(self.modelMap, includeOption, JSON.parse(filter), self.model.getTableName());
+        var jFiter = wrapSeqSchema(JSON.parse(filter), self.model.getTableName());
+        console.log("filter", JSON.stringify(jFiter, null, 4));
+        insertWhere(self.modelMap, includeOption, jFiter, self.model.getTableName());
         var baseWhere = {};
         if (typeof includeOption['where'] != 'undefined') {
             baseWhere = includeOption['where'];
@@ -446,6 +490,7 @@ CrudController.prototype = {
             var resObj = results.map( (r) => ( r.toJSON() ) )
             console.log("results are ", resObj);
             unwrapSimpleArray(resObj);
+            unwrapSeqSchema(resObj);
             return self.Okay(res, resObj);
         }, err => {
             return self.Error(res, err);
@@ -485,6 +530,7 @@ CrudController.prototype = {
             });
             console.log("results are ", resObj);
             unwrapSimpleArray(resObj);
+            unwrapSeqSchema(resObj);
             return self.Okay(res, self.getResponseObject(resObj));
         }, err => {
             return self.Error(res, err);
@@ -504,14 +550,18 @@ CrudController.prototype = {
         var body = params.map(req)[payload];
         var tableName = this.model.getTableName();
         var sequelizeBody = convertToSequelizeCreate(tableName, body);
+        console.log("create body", sequelizeBody);
         // console.log("Sequelize Body is....\n" + JSON.stringify(sequelizeBody, null, 4));
         var includeOption = getIncludeOptions(self.complexLevel);
+        console.log("Include option ",includeOption);
         var ins = this.model.build(sequelizeBody, includeOption)
         ins.save().then(data => {
             var returnObj = data.get({
                 plain: true
             });
+
             unwrapSimpleArray(returnObj)
+            unwrapSeqSchema(returnObj)
             var logObject = {
                 'operation': 'Create',
                 'user': req.user ? req.user.username : req.headers['masterName'],
@@ -656,6 +706,9 @@ CrudController.prototype = {
                 oldValues = result;
                 result.changed('updatedAt', true)
                 updatePromises.push(result.save());
+                console.log("old result ",JSON.stringify(result ,null,4));
+                console.log("table name ", tableName);
+                bodyData = wrapSeqSchema(bodyData, tableName);
                 updateTable(result, bodyData, updatePromises);
                 return Promise.all(updatePromises)
             })
@@ -666,7 +719,7 @@ CrudController.prototype = {
             })
             .then(updatedResult => {
                 // var resObj = JSON.parse(JSON.stringify(updatedResult, null, 4));
-                if(result === null){
+                if(updatedResult === null){
                     return Promise.reject(new Error("No record found"))
                 }
                 var resObj = updatedResult.get({
@@ -675,6 +728,7 @@ CrudController.prototype = {
                 console.log("Updated Result ", resObj);
                 newValues = resObj;
                 unwrapSimpleArray(resObj);
+                unwrapSeqSchema(resObj);
                 var logObject = {
                     'operation': 'update',
                     'user': req.user ? req.user.username : req.headers['masterName'],

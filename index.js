@@ -66,16 +66,16 @@ function generateSequelize(sequelize, tableName, obj) {
     else if (obj[el] instanceof Array) {
       console.log(el + " has Many relation");
       // console.log(JSON.stringify(obj[el][0],null,4));
-      promises.push(generateSequelize(sequelize, el, obj[el][0]).then(model =>
-        childModels.push({ model: model, relationship: "many", name: el })));
+      promises.push(generateSequelize(sequelize, tableName+"#"+el, obj[el][0]).then(model =>
+        childModels.push({ model: model, relationship: "many", name: tableName+"#"+el })));
     } else {
       if (typeof obj[el]["type"] == 'string') {
         columns[el] = obj[el];
         // console.log("Table "+tableName+" Column "+el);
       } else {
         console.log(el + " has one relation");
-        promises.push(generateSequelize(sequelize, el, obj[el]).then(model =>
-          childModels.push({ model: model, relationship: "one", name: el })));
+        promises.push(generateSequelize(sequelize, tableName+"#"+el, obj[el]).then(model =>
+          childModels.push({ model: model, relationship: "one", name: tableName+"#"+el })));
       }
     }
   });
