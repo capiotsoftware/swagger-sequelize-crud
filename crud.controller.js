@@ -18,7 +18,7 @@ const requestLib = require('request');
 * @param {Map} modelMap - Map of all Sequelize Model mapped to its tableName.
 */
 
-function CrudController(model, logger, complexLevel, modelMap) {
+function CrudController(model, logger, complexLevel, modelMap, shaObject) {
     // call super constructor
     BaseController.call(this, this);
     // set the model instance to work on
@@ -26,12 +26,13 @@ function CrudController(model, logger, complexLevel, modelMap) {
     this.logger = logger;
     this.complexLevel = complexLevel;
     this.modelMap = modelMap;
+    this.shaObject = shaObject;
     // set id name if defined, defaults to 'id'
     this.omit = [];
     _.bindAll(this);
 }
 
-function insertWhere(modelMap, includeStruct, whereStruct, modelName) {
+function insertWhere(modelMap, includeStruct, whereStruct, modelName, shaObject) {
     Object.keys(whereStruct).forEach(el => {
         if (el == '$where') {
             includeStruct['where'] = whereStruct['$where'];
@@ -40,15 +41,15 @@ function insertWhere(modelMap, includeStruct, whereStruct, modelName) {
                 includeStruct['include'] = [];
             var modelExistFlag = false;
             includeStruct['include'].forEach(includeObj => {
-                if (typeof includeObj['as'] != 'undefined' && includeObj['as'] == el) {
-                    insertWhere(modelMap, includeObj, whereStruct[el], el);
+                if (typeof includeObj['as'] != 'undefined' && includeObj['as'] == shaObject['modelToShaMap'][el]) {
+                    insertWhere(modelMap, includeObj, whereStruct[el], el, shaObject);
                     modelExistFlag = true;
                     // break;
                 }
             })
             if (!modelExistFlag) {
                 var newIncludeObj = { as: el, model: modelMap[el], attributes: [] }
-                insertWhere(modelMap, newIncludeObj, whereStruct[el], el);
+                insertWhere(modelMap, newIncludeObj, whereStruct[el], el, shaObject);
                 includeStruct['include'].push(newIncludeObj);
             }
         }
@@ -69,21 +70,22 @@ function unwrapSimpleArray(obj) {
     return obj;
 }
 
-function wrapSeqSchema(json, key) {
+function wrapSeqSchema(json, key, shaObject) {
     var sequelizeJson = {};
     Object.keys(json).forEach(el => {
+        var newShaKey = shaObject['modelToShaMap'][key+"#"+el];
         var newKey = key+"#"+el;
         if(el === '$where'){
             sequelizeJson[el] = json[el];
         }
         else if (json[el] instanceof Array) {
-            sequelizeJson[newKey] = [];
+            sequelizeJson[newShaKey] = [];
             json[el].forEach(data => {
-                (typeof data == 'object') ? sequelizeJson[newKey].push(wrapSeqSchema(data, newKey)) : sequelizeJson[newKey].push(data);
+                (typeof data == 'object') ? sequelizeJson[newShaKey].push(wrapSeqSchema(data, newKey, shaObject)) : sequelizeJson[newShaKey].push(data);
             })
         }
         else if (typeof json[el] == 'object') {
-            sequelizeJson[newKey] = wrapSeqSchema(json[el], newKey);
+            sequelizeJson[newShaKey] = wrapSeqSchema(json[el], newKey, shaObject);
         }
         else {
             sequelizeJson[el] = json[el];
@@ -92,17 +94,21 @@ function wrapSeqSchema(json, key) {
     return sequelizeJson;
 }
 
-function unwrapSeqSchema(obj){
+function unwrapSeqSchema(obj, shaObject){
     Object.keys(obj).forEach(el=>{        
         if(obj[el] instanceof Array && obj[el][0] && typeof obj[el][0] === 'object'){
             obj[el].forEach(subObj=>{
-                unwrapSeqSchema(subObj)
+                unwrapSeqSchema(subObj, shaObject)
             })
         }
         else if(obj[el] != null && typeof obj[el] === 'object'){
-            unwrapSeqSchema(obj[el])
+            unwrapSeqSchema(obj[el], shaObject)
         }
-        var elArray = el.split("#");
+        // console.log('el is ',el);
+        // console.log('sha is ',shaObject);
+        var newEl = typeof shaObject['shaToModelMap'][el] === 'undefined' ? el : shaObject['shaToModelMap'][el];
+        // console.log("newEl ",newEl);
+        var elArray = newEl.split("#");
         var newKey = elArray[elArray.length - 1];
         obj[newKey] = obj[el];
         if(elArray.length>1)
@@ -123,7 +129,7 @@ function addStruct(parentStruct, child, key) {
     }
 }
 
-function generateInclude(select, modelMap, rootTableName, excludeFlag) {
+function generateInclude(select, modelMap, rootTableName, excludeFlag, shaObject) {
     var struct = {};
     var newSelect = [];
     if (excludeFlag)
@@ -134,22 +140,22 @@ function generateInclude(select, modelMap, rootTableName, excludeFlag) {
         addStruct(struct, el, rootTableName);
     })
     // console.log("struct is " + JSON.stringify(struct, null, 4));
-    var includeOption = generateIncludeRecursive(modelMap, struct, rootTableName, false, excludeFlag);
+    var includeOption = generateIncludeRecursive(modelMap, struct, rootTableName, false, excludeFlag, shaObject);
     // console.log("Include object is " + JSON.stringify(includeOption, null, 4));
     return includeOption;
 }
 
-function generateIncludeRecursive(modelMap, struct, model, modelOption, excludeFlag) {
+function generateIncludeRecursive(modelMap, struct, model, modelOption, excludeFlag, shaObject) {
     var includeObj = null;
-    if (modelMap[model] != null) {
+    if (modelMap[shaObject['modelToShaMap'][model]] != null) {
         var attrArray = [], includeArray = [];
         includeObj = {};
         if (modelOption) {
-            includeObj['as'] = model;
-            includeObj['model'] = modelMap[model];
+            includeObj['as'] = shaObject['modelToShaMap'][model];
+            includeObj['model'] = modelMap[shaObject['modelToShaMap'][model]];
             // console.log("Attributes of model are "+JSON.stringify(,null,4));
         }
-        var validAttributes = Object.keys(modelMap[model].rawAttributes);
+        var validAttributes = Object.keys(modelMap[shaObject['modelToShaMap'][model]].rawAttributes);
         var allFlag = false;
         Object.keys(struct).forEach(el => {
             if (struct[el] == true) {
@@ -160,7 +166,7 @@ function generateIncludeRecursive(modelMap, struct, model, modelOption, excludeF
                     allFlag = true;
                 }
             } else if (typeof struct[el] == 'object') {
-                var singleInclude = generateIncludeRecursive(modelMap, struct[el], el, true, excludeFlag);
+                var singleInclude = generateIncludeRecursive(modelMap, struct[el], el, true, excludeFlag, shaObject);
                 if (singleInclude != null)
                     includeArray.push(singleInclude);
             }
@@ -181,10 +187,10 @@ function generateIncludeRecursive(modelMap, struct, model, modelOption, excludeF
 
 
 //var updatePromises = [];
-function updateTable(result, updateBody, updatePromises) {
+function updateTable(result, updateBody, updatePromises, shaObject) {
     // console.log("Result object is " + JSON.stringify(result, null, 4));
     var updateFields = {};
-    console.log("wrap update body", updateBody);
+    // console.log("wrap update body", updateBody);
     Object.keys(updateBody).forEach(el => {
         if (updateBody[el] instanceof Array) {
             if (updateBody[el][0] && typeof updateBody[el][0] != 'object') {
@@ -228,7 +234,7 @@ function updateTable(result, updateBody, updatePromises) {
             }
         }
         else if (typeof updateBody[el] == 'object') {
-            updateTable(result[el], updateBody[el], updatePromises);
+            updateTable(result[el], updateBody[el], updatePromises, shaObject);
         } else {
             updateFields[el] = updateBody[el];
         }
@@ -256,18 +262,22 @@ function getIncludeOptions(depth) {
     return newObj;
 }
 
-function convertToSequelizeCreate(key, json) {
+function convertToSequelizeCreate(key, json, shaObject) {
+    // console.log("SHA ", shaObject);
     var sequelizeCreateJson = {};
     Object.keys(json).forEach(el => {
+        var newShaKey = shaObject['modelToShaMap'][key+"#"+el];
         var newKey = key+"#"+el;
         if (json[el] instanceof Array) {
-            sequelizeCreateJson[newKey] = [];
+            sequelizeCreateJson[newShaKey] = [];
+            // console.log("--------------New sha key", newShaKey, newKey);
             json[el].forEach(data => {
-                (typeof data == 'object') ? sequelizeCreateJson[newKey].push(convertToSequelizeCreate(newKey, data)) : sequelizeCreateJson[newKey].push({ '#value': data });
+                (typeof data == 'object') ? sequelizeCreateJson[newShaKey].push(convertToSequelizeCreate(newKey, data, shaObject)) : sequelizeCreateJson[newShaKey].push({ '#value': data });
             })
         }
         else if (typeof json[el] == 'object') {
-            sequelizeCreateJson[newKey] = convertToSequelizeCreate(newKey, json[el]);
+            // console.log("--------------New sha key", newShaKey);
+            sequelizeCreateJson[newShaKey] = convertToSequelizeCreate(newKey, json[el], shaObject);
         }
         else {
             sequelizeCreateJson[el] = json[el];
@@ -463,6 +473,7 @@ CrudController.prototype = {
         var skip = count * (page - 1);
         var self = this;
         var select = { all: true };
+        var tableName = this.shaObject['shaToModelMap'][this.model.getTableName()];
         var includeOption = getIncludeOptions(self.complexLevel)
         if (reqParams['select']) {
             var selectArray = reqParams.select.split(',');
@@ -472,25 +483,28 @@ CrudController.prototype = {
                     excludeFlag = false;
                 }
             })
-            includeOption = generateInclude(selectArray, self.modelMap, self.model.getTableName(), excludeFlag);
+            includeOption = generateInclude(selectArray, self.modelMap, tableName, excludeFlag, self.shaObject);
+            console.log("include option ", includeOption);  
             select = includeOption['attributes'];
         }
-        console.log("Include ", JSON.stringify(includeOption, null, 4));
+        
         // console.log("IncludeOption is "+JSON.stringify(includeOption, null ,4));
-        var jFiter = wrapSeqSchema(JSON.parse(filter), self.model.getTableName());
+        
+        var jFiter = wrapSeqSchema(JSON.parse(filter), tableName, self.shaObject);
         console.log("filter", JSON.stringify(jFiter, null, 4));
-        insertWhere(self.modelMap, includeOption, jFiter, self.model.getTableName());
+        insertWhere(self.modelMap, includeOption, jFiter, tableName, self.shaObject);
         var baseWhere = {};
         if (typeof includeOption['where'] != 'undefined') {
             baseWhere = includeOption['where'];
         }
+        console.log("Include ", JSON.stringify(includeOption, null, 4));
         // console.log("Include option is "+JSON.stringify(includeOption, null, 4));
         // console.log("sort is ", sort);
         this.model.findAll({ limit: count, offset: skip, attributes: select, order: sort, include: includeOption['include'], where: baseWhere }).then(results => {
             var resObj = results.map( (r) => ( r.toJSON() ) )
             console.log("results are ", resObj);
             unwrapSimpleArray(resObj);
-            unwrapSeqSchema(resObj);
+            unwrapSeqSchema(resObj, self.shaObject);
             return self.Okay(res, resObj);
         }, err => {
             return self.Error(res, err);
@@ -508,7 +522,8 @@ CrudController.prototype = {
         console.log("Inside show");
         var reqParams = params.map(req);
         var select = { all: true };
-        var includeOption = getIncludeOptions(self.complexLevel)
+        var includeOption = getIncludeOptions(self.complexLevel);
+        var tableName = this.shaObject['shaToModelMap'][this.model.getTableName()];
         if (reqParams['select']) {
             var selectArray = reqParams.select.split(',');
             var excludeFlag = true;
@@ -517,7 +532,7 @@ CrudController.prototype = {
                     excludeFlag = false;
                 }
             })
-            includeOption = generateInclude(selectArray, self.modelMap, self.model.getTableName(), excludeFlag);
+            includeOption = generateInclude(selectArray, self.modelMap, tableName, excludeFlag, self.shaObject);
             select = includeOption['attributes'];
         }
         this.model.findOne({ where: { id: reqParams['id'] }, attributes: select, include: includeOption['include'] }).then(results => {
@@ -530,7 +545,7 @@ CrudController.prototype = {
             });
             console.log("results are ", resObj);
             unwrapSimpleArray(resObj);
-            unwrapSeqSchema(resObj);
+            unwrapSeqSchema(resObj, self.shaObject);
             return self.Okay(res, self.getResponseObject(resObj));
         }, err => {
             return self.Error(res, err);
@@ -548,8 +563,8 @@ CrudController.prototype = {
         var self = this;
         var payload = 'data';
         var body = params.map(req)[payload];
-        var tableName = this.model.getTableName();
-        var sequelizeBody = convertToSequelizeCreate(tableName, body);
+        var tableName = this.shaObject['shaToModelMap'][this.model.getTableName()];
+        var sequelizeBody = convertToSequelizeCreate(tableName, body, self.shaObject);
         console.log("create body", sequelizeBody);
         // console.log("Sequelize Body is....\n" + JSON.stringify(sequelizeBody, null, 4));
         var includeOption = getIncludeOptions(self.complexLevel);
@@ -561,7 +576,7 @@ CrudController.prototype = {
             });
 
             unwrapSimpleArray(returnObj)
-            unwrapSeqSchema(returnObj)
+            unwrapSeqSchema(returnObj, self.shaObject)
             var logObject = {
                 'operation': 'Create',
                 'user': req.user ? req.user.username : req.headers['masterName'],
@@ -689,7 +704,7 @@ CrudController.prototype = {
         }
         var self = this;
         var bodyData = _.omit(body, this.omit);
-        var tableName = this.model.getTableName();
+        var tableName = this.shaObject['shaToModelMap'][this.model.getTableName()];
         // var sequelizeBody = convertToSequelizeCreate(tableName, body);
         // var collectionName=this.model.modelName;
         var includeOption = getIncludeOptions(self.complexLevel);
@@ -708,8 +723,8 @@ CrudController.prototype = {
                 updatePromises.push(result.save());
                 console.log("old result ",JSON.stringify(result ,null,4));
                 console.log("table name ", tableName);
-                bodyData = wrapSeqSchema(bodyData, tableName);
-                updateTable(result, bodyData, updatePromises);
+                bodyData = wrapSeqSchema(bodyData, tableName, self.shaObject);
+                updateTable(result, bodyData, updatePromises, self.shaObject);
                 return Promise.all(updatePromises)
             })
             .then((resolvedPromises) => {                
@@ -728,7 +743,7 @@ CrudController.prototype = {
                 console.log("Updated Result ", resObj);
                 newValues = resObj;
                 unwrapSimpleArray(resObj);
-                unwrapSeqSchema(resObj);
+                unwrapSeqSchema(resObj, self.shaObject);
                 var logObject = {
                     'operation': 'update',
                     'user': req.user ? req.user.username : req.headers['masterName'],

@@ -6,6 +6,15 @@ log4js.levels.forName('AUDIT', 50001);
 var logger = process.env.PROD_ENV ? log4js.getLogger('swagger-sequelize-crud') : log4js.getLogger('swagger-sequelize-crud-dev');
 var params = require('./swagger.params.map');
 const Sequelize = require("sequelize");
+const crypto = require('crypto');
+
+function sha1(data) {
+  var generator = crypto.createHash('sha1');
+  generator.update(data)
+  return generator.digest('hex')
+}
+
+
 /**
 * Constructor function for SequelizeModel
 * @classdesc Basic mongoose Model sytem
@@ -24,15 +33,17 @@ function SequelizeModel(sequelize, definition, modelName, options, hooks) {
   generateSequelize(sequelize, modelName, definition)
     .then(model => {
       self.model = model;
-      if(typeof hooks !== 'undefined'){
-        hooks.forEach(hookObj=>{
+      if (typeof hooks !== 'undefined') {
+        hooks.forEach(hookObj => {
           self.model.addHook(hookObj.event, hookObj.hookName, hookObj.func);
         })
       }
       sequelize.sync()
     })
     .then(() => {
-      ParamController.call(self, self.model, modelName, logger, complexLevel, modelMap);
+      var shaObject = { shaToModelMap, modelToShaMap};
+      // console.log("-----------------------SHAObject index", shaObject);
+      ParamController.call(self, self.model, modelName, logger, complexLevel, modelMap, shaObject);
     })
     .catch(err => {
       console.log("Something Messed up........ ", err);
@@ -52,7 +63,8 @@ function SequelizeModel(sequelize, definition, modelName, options, hooks) {
 }
 
 var modelMap = [];
-
+var shaToModelMap = [];
+var modelToShaMap = [];
 function generateSequelize(sequelize, tableName, obj) {
   // console.log("object is ", JSON.stringify(obj, null, 4));
   console.log("New Table " + tableName);
@@ -60,25 +72,26 @@ function generateSequelize(sequelize, tableName, obj) {
   var columns = {};
   var promises = [];
   Object.keys(obj).forEach(el => {
-    if(el == 'enum'){//do nothing
+    if (el == 'enum') {
+      //do nothing
     }
-    else if (typeof obj[el] == 'string') {   
-      columns['#value'] = obj
+    else if (typeof obj[el] == 'string') {
+      columns['#value'] = obj;
       // console.log("Table "+tableName+" Column "+"Value");
     }
     else if (obj[el] instanceof Array) {
-      console.log(tableName+"#"+el + " has Many relation");
+      console.log(tableName + "#" + el + " has Many relation");
       // console.log(JSON.stringify(obj[el][0],null,4));
-      promises.push(generateSequelize(sequelize, tableName+"#"+el, obj[el][0]).then(model =>
-        childModels.push({ model: model, relationship: "many", name: tableName+"#"+el })));
+      promises.push(generateSequelize(sequelize, tableName + "#" + el, obj[el][0]).then(model =>
+        childModels.push({ model: model, relationship: "many", name: tableName + "#" + el })));
     } else {
       if (typeof obj[el]["type"] == 'string') {
         columns[el] = obj[el];
         // console.log("Table "+tableName+" Column "+el);
       } else {
-        console.log(tableName+"#"+el + " has one relation");
-        promises.push(generateSequelize(sequelize, tableName+"#"+el, obj[el]).then(model =>
-          childModels.push({ model: model, relationship: "one", name: tableName+"#"+el })));
+        console.log(tableName + "#" + el + " has one relation");
+        promises.push(generateSequelize(sequelize, tableName + "#" + el, obj[el]).then(model =>
+          childModels.push({ model: model, relationship: "one", name: tableName + "#" + el })));
       }
     }
   });
@@ -89,14 +102,17 @@ function generateSequelize(sequelize, tableName, obj) {
     .then(_ => sequelize.authenticate())
     .then(_ => {
       var c2 = getSequelizeDefinition(columns);
-      console.log("Creating Model for " + tableName + " with fields... \n" + require('util').inspect(c2, { depth: null }));
+      var newTableName = sha1(tableName);
+      console.log("Creating Model for " + tableName + " with fields... \n" + require('util').inspect(c2, { depth: null }) + "with tablename " + newTableName);
       // console.log("columns are ",c2);
-      var model = sequelize.define(tableName, c2, { freezeTableName: true, paranoid: true });
+      var model = sequelize.define(newTableName, c2, { freezeTableName: true, paranoid: true });
       // console.log("model is ",model);
-      modelMap[tableName] = model;
+      modelMap[newTableName] = model;
+      shaToModelMap[newTableName] = tableName;
+      modelToShaMap[tableName] = newTableName;
       childModels.forEach(el => {
         if (el['relationship'] == 'many') {
-          model.hasMany(el['model'], { as: el['name'], onDelete: 'CASCADE', hooks: true, constraints: true });
+          model.hasMany(el['model'], { as: sha1(el['name']), onDelete: 'CASCADE', hooks: true, constraints: true });
           // el['model'].belongsTo(model);
         }
         else if (el['relationship'] == 'one') {
