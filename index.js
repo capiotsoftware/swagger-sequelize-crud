@@ -54,17 +54,20 @@ function SequelizeModel(sequelize, definition, modelName, options, hooks) {
 var modelMap = [];
 
 function generateSequelize(sequelize, tableName, obj) {
+  // console.log("object is ", JSON.stringify(obj, null, 4));
   console.log("New Table " + tableName);
   var childModels = [];
   var columns = {};
   var promises = [];
   Object.keys(obj).forEach(el => {
-    if (typeof obj[el] == 'string') {
-      columns['#value'] = obj;
+    if(el == 'enum'){//do nothing
+    }
+    else if (typeof obj[el] == 'string') {   
+      columns['#value'] = obj
       // console.log("Table "+tableName+" Column "+"Value");
     }
     else if (obj[el] instanceof Array) {
-      console.log(el + " has Many relation");
+      console.log(tableName+"#"+el + " has Many relation");
       // console.log(JSON.stringify(obj[el][0],null,4));
       promises.push(generateSequelize(sequelize, tableName+"#"+el, obj[el][0]).then(model =>
         childModels.push({ model: model, relationship: "many", name: tableName+"#"+el })));
@@ -73,7 +76,7 @@ function generateSequelize(sequelize, tableName, obj) {
         columns[el] = obj[el];
         // console.log("Table "+tableName+" Column "+el);
       } else {
-        console.log(el + " has one relation");
+        console.log(tableName+"#"+el + " has one relation");
         promises.push(generateSequelize(sequelize, tableName+"#"+el, obj[el]).then(model =>
           childModels.push({ model: model, relationship: "one", name: tableName+"#"+el })));
       }
@@ -89,6 +92,7 @@ function generateSequelize(sequelize, tableName, obj) {
       console.log("Creating Model for " + tableName + " with fields... \n" + require('util').inspect(c2, { depth: null }));
       // console.log("columns are ",c2);
       var model = sequelize.define(tableName, c2, { freezeTableName: true, paranoid: true });
+      // console.log("model is ",model);
       modelMap[tableName] = model;
       childModels.forEach(el => {
         if (el['relationship'] == 'many') {
@@ -103,6 +107,7 @@ function generateSequelize(sequelize, tableName, obj) {
       return model;
     })
     .catch(err => {
+      console.log("Error", err);
       console.error("Something Messed up! " + require('util').inspect(model, { depth: null }));
     });
 
@@ -134,6 +139,7 @@ function getSequelizeEquivalentType(json) {
     var en = json["enum"];
     return Sequelize.ENUM(en);
   } else {
+    // console.log("Json inside getTye", json);
     var typeUCase = json["type"].toUpperCase();
     switch (typeUCase) {
       case 'NUMBER': { return Sequelize.DOUBLE; }
