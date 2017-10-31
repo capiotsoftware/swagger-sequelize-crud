@@ -8,10 +8,24 @@ var params = require('./swagger.params.map');
 const Sequelize = require("sequelize");
 const crypto = require('crypto');
 
-function sha1(data) {
-  var generator = crypto.createHash('sha1');
-  generator.update(data)
-  return generator.digest('hex')
+function generateTableName(data) {
+  var dataArr = data.split('#');
+  var tableName = "";
+  if(dataArr.length>1){
+    tableName = dataArr.reduce((pre, cur)=>{
+      return pre+("_"+cur.substring(0,Math.min(2,cur.length)));
+      },"")
+  }else{
+    tableName = data
+  }
+  var counter = 0;
+  while(shaToModelMap[tableName]){
+    // console.log("Table Name "+ tableName +" exist... Creating new tablename");
+    counter++;
+    tableName = counter>1?tableName.substring(0,tableName.length-1)+counter:tableName+counter;
+  }
+  // console.log("Table name is ",tableName);
+  return tableName;
 }
 
 
@@ -102,7 +116,7 @@ function generateSequelize(sequelize, tableName, obj) {
     .then(_ => sequelize.authenticate())
     .then(_ => {
       var c2 = getSequelizeDefinition(columns);
-      var newTableName = sha1(tableName);
+      var newTableName = generateTableName(tableName);
       console.log("Creating Model for " + tableName + " with fields... \n" + require('util').inspect(c2, { depth: null }) + "with tablename " + newTableName);
       // console.log("columns are ",c2);
       var model = sequelize.define(newTableName, c2, { freezeTableName: true, paranoid: true });
@@ -111,8 +125,8 @@ function generateSequelize(sequelize, tableName, obj) {
       shaToModelMap[newTableName] = tableName;
       modelToShaMap[tableName] = newTableName;
       childModels.forEach(el => {
-        if (el['relationship'] == 'many') {
-          model.hasMany(el['model'], { as: sha1(el['name']), onDelete: 'CASCADE', hooks: true, constraints: true });
+        if (el['relationship'] == 'many') { 
+          model.hasMany(el['model'], { as: modelToShaMap[el['name']], onDelete: 'CASCADE', hooks: true, constraints: true });
           // el['model'].belongsTo(model);
         }
         else if (el['relationship'] == 'one') {

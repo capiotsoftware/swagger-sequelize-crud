@@ -263,20 +263,20 @@ function getIncludeOptions(depth) {
 }
 
 function convertToSequelizeCreate(key, json, shaObject) {
-    // console.log("SHA ", shaObject);
+    console.log("SHA ", shaObject);
     var sequelizeCreateJson = {};
     Object.keys(json).forEach(el => {
         var newShaKey = shaObject['modelToShaMap'][key+"#"+el];
         var newKey = key+"#"+el;
         if (json[el] instanceof Array) {
             sequelizeCreateJson[newShaKey] = [];
-            // console.log("--------------New sha key", newShaKey, newKey);
+            console.log("--------------New sha key", newShaKey, newKey);
             json[el].forEach(data => {
                 (typeof data == 'object') ? sequelizeCreateJson[newShaKey].push(convertToSequelizeCreate(newKey, data, shaObject)) : sequelizeCreateJson[newShaKey].push({ '#value': data });
             })
         }
         else if (typeof json[el] == 'object') {
-            // console.log("--------------New sha key", newShaKey);
+            console.log("--------------New sha key", newShaKey);
             sequelizeCreateJson[newShaKey] = convertToSequelizeCreate(newKey, json[el], shaObject);
         }
         else {
@@ -565,16 +565,16 @@ CrudController.prototype = {
         var body = params.map(req)[payload];
         var tableName = this.shaObject['shaToModelMap'][this.model.getTableName()];
         var sequelizeBody = convertToSequelizeCreate(tableName, body, self.shaObject);
-        console.log("create body", sequelizeBody);
+        // console.log("create body", sequelizeBody);
         // console.log("Sequelize Body is....\n" + JSON.stringify(sequelizeBody, null, 4));
         var includeOption = getIncludeOptions(self.complexLevel);
-        console.log("Include option ",includeOption);
+        // console.log("Include option ",includeOption);
         var ins = this.model.build(sequelizeBody, includeOption)
         ins.save().then(data => {
             var returnObj = data.get({
                 plain: true
             });
-
+            // console.log("data in db ",returnObj);
             unwrapSimpleArray(returnObj)
             unwrapSeqSchema(returnObj, self.shaObject)
             var logObject = {
@@ -722,7 +722,7 @@ CrudController.prototype = {
                 result.changed('updatedAt', true)
                 updatePromises.push(result.save());
                 console.log("old result ",JSON.stringify(result ,null,4));
-                console.log("table name ", tableName);
+                // console.log("table name ", tableName);
                 bodyData = wrapSeqSchema(bodyData, tableName, self.shaObject);
                 updateTable(result, bodyData, updatePromises, self.shaObject);
                 return Promise.all(updatePromises)
