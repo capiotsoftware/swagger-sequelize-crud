@@ -263,20 +263,20 @@ function getIncludeOptions(depth) {
 }
 
 function convertToSequelizeCreate(key, json, shaObject) {
-    console.log("SHA ", shaObject);
+    // console.log("SHA ", shaObject);
     var sequelizeCreateJson = {};
     Object.keys(json).forEach(el => {
         var newShaKey = shaObject['modelToShaMap'][key+"#"+el];
         var newKey = key+"#"+el;
         if (json[el] instanceof Array) {
             sequelizeCreateJson[newShaKey] = [];
-            console.log("--------------New sha key", newShaKey, newKey);
+            // console.log("--------------New sha key", newShaKey, newKey);
             json[el].forEach(data => {
                 (typeof data == 'object') ? sequelizeCreateJson[newShaKey].push(convertToSequelizeCreate(newKey, data, shaObject)) : sequelizeCreateJson[newShaKey].push({ '#value': data });
             })
         }
         else if (typeof json[el] == 'object') {
-            console.log("--------------New sha key", newShaKey);
+            // console.log("--------------New sha key", newShaKey);
             sequelizeCreateJson[newShaKey] = convertToSequelizeCreate(newKey, json[el], shaObject);
         }
         else {
