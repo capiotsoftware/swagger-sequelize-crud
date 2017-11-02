@@ -17,13 +17,13 @@ var CrudController = require('./crud.controller');
  * @param {String} complexLevel - Max nested level of schema,
  * @param {Map} modelMap - Map of all Sequelize Model mapped to its tableName.
  */
-function ParamController(model, idName, logger, complexLevel, modelMap, shaObject) {
+function ParamController(model, idName, logger, schemaStruct, modelMap, shaObject) {
     var modelName = idName.toLowerCase();
 
     var paramName = modelName + 'Param';
 
     // call super constructor
-    CrudController.call(this, model ,logger, complexLevel, modelMap, shaObject);
+    CrudController.call(this, model ,logger, schemaStruct, modelMap, shaObject);
     // only set param if it is set, will default to 'id'
     if (!paramName) {
         paramName = modelName + 'Param';

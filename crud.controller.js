@@ -18,13 +18,13 @@ const requestLib = require('request');
 * @param {Map} modelMap - Map of all Sequelize Model mapped to its tableName.
 */
 
-function CrudController(model, logger, complexLevel, modelMap, shaObject) {
+function CrudController(model, logger, schemaStruct, modelMap, shaObject) {
     // call super constructor
     BaseController.call(this, this);
     // set the model instance to work on
     this.model = model;
     this.logger = logger;
-    this.complexLevel = complexLevel;
+    this.schemaStruct = schemaStruct;
     this.modelMap = modelMap;
     this.shaObject = shaObject;
     // set id name if defined, defaults to 'id'
@@ -32,7 +32,7 @@ function CrudController(model, logger, complexLevel, modelMap, shaObject) {
     _.bindAll(this);
 }
 
-function insertWhere(modelMap, includeStruct, whereStruct, modelName, shaObject) {
+function insertWhere(modelMap, includeStruct, whereStruct) {
     Object.keys(whereStruct).forEach(el => {
         if (el == '$where') {
             includeStruct['where'] = whereStruct['$where'];
@@ -40,16 +40,19 @@ function insertWhere(modelMap, includeStruct, whereStruct, modelName, shaObject)
             if (typeof includeStruct['include'] == 'undefined')
                 includeStruct['include'] = [];
             var modelExistFlag = false;
-            includeStruct['include'].forEach(includeObj => {
-                if (typeof includeObj['as'] != 'undefined' && includeObj['as'] == shaObject['modelToShaMap'][el]) {
-                    insertWhere(modelMap, includeObj, whereStruct[el], el, shaObject);
-                    modelExistFlag = true;
-                    // break;
-                }
-            })
+            // console.log("-------Include Struct", JSON.stringify(includeStruct, null, 4));
+            if (includeStruct['include'] instanceof Array) {
+                includeStruct['include'].forEach(includeObj => {
+                    if (typeof includeObj['as'] != 'undefined' && includeObj['as'] == el) {
+                        insertWhere(modelMap, includeObj, whereStruct[el]);
+                        modelExistFlag = true;
+                    }
+                })
+            }
+
             if (!modelExistFlag) {
                 var newIncludeObj = { as: el, model: modelMap[el], attributes: [] }
-                insertWhere(modelMap, newIncludeObj, whereStruct[el], el, shaObject);
+                insertWhere(modelMap, newIncludeObj, whereStruct[el]);
                 includeStruct['include'].push(newIncludeObj);
             }
         }
@@ -73,18 +76,20 @@ function unwrapSimpleArray(obj) {
 function wrapSeqSchema(json, key, shaObject) {
     var sequelizeJson = {};
     Object.keys(json).forEach(el => {
-        var newShaKey = shaObject['modelToShaMap'][key+"#"+el];
-        var newKey = key+"#"+el;
-        if(el === '$where'){
+        var newShaKey = shaObject['modelToShaMap'][key + "#" + el];
+        var newKey = key + "#" + el;
+        if (el === '$where') {
             sequelizeJson[el] = json[el];
         }
         else if (json[el] instanceof Array) {
+            if(!newShaKey)throw new Error("Key "+el+" not valid");
             sequelizeJson[newShaKey] = [];
             json[el].forEach(data => {
                 (typeof data == 'object') ? sequelizeJson[newShaKey].push(wrapSeqSchema(data, newKey, shaObject)) : sequelizeJson[newShaKey].push(data);
             })
         }
         else if (typeof json[el] == 'object') {
+            if(!newShaKey)throw new Error("Key "+el+" not valid");
             sequelizeJson[newShaKey] = wrapSeqSchema(json[el], newKey, shaObject);
         }
         else {
@@ -94,14 +99,14 @@ function wrapSeqSchema(json, key, shaObject) {
     return sequelizeJson;
 }
 
-function unwrapSeqSchema(obj, shaObject){
-    Object.keys(obj).forEach(el=>{        
-        if(obj[el] instanceof Array && obj[el][0] && typeof obj[el][0] === 'object'){
-            obj[el].forEach(subObj=>{
+function unwrapSeqSchema(obj, shaObject) {
+    Object.keys(obj).forEach(el => {
+        if (obj[el] instanceof Array && obj[el][0] && typeof obj[el][0] === 'object') {
+            obj[el].forEach(subObj => {
                 unwrapSeqSchema(subObj, shaObject)
             })
         }
-        else if(obj[el] != null && typeof obj[el] === 'object'){
+        else if (obj[el] != null && typeof obj[el] === 'object') {
             unwrapSeqSchema(obj[el], shaObject)
         }
         // console.log('el is ',el);
@@ -111,7 +116,7 @@ function unwrapSeqSchema(obj, shaObject){
         var elArray = newEl.split("#");
         var newKey = elArray[elArray.length - 1];
         obj[newKey] = obj[el];
-        if(elArray.length>1)
+        if (elArray.length > 1)
             delete obj[el];
     })
 }
@@ -121,7 +126,7 @@ function addStruct(parentStruct, child, key) {
     if (childArray.length == 1) {
         parentStruct[child] = true;
     } else {
-        var newKey = key+'#'+childArray[0]; 
+        var newKey = key + '#' + childArray[0];
         // console.log('Parent struct is '+parentStruct[childArray[0]]);
         if (typeof parentStruct[newKey] == 'undefined')
             parentStruct[newKey] = {};
@@ -226,7 +231,7 @@ function updateTable(result, updateBody, updatePromises, shaObject) {
                         // console.log("New Error no id complex object");
 
                         updatePromises.push(new Promise((res, rej) => {
-                            rej(new Error('Need id to update '+el));
+                            rej(new Error('Need id to update ' + el));
                         }));
                         return;
                     }
@@ -253,21 +258,21 @@ function getDepthOfObject(object) {
     return level;
 }
 
-function getIncludeOptions(depth) {
-    // var depth = getDepthOfObject(object);
-    var newObj = { include: { all: true } };
-    for (var i = 0; i < depth - 1; i++) {
-        newObj['include'] = { all: true, include: newObj['include'] };
-    }
-    return newObj;
+function getIncludeOptions(modelMap, schemaStruct, tableName, shaObject) {
+    var includeOptionGar = generateIncludeRecursive(modelMap, schemaStruct, tableName, false, false, shaObject);
+    var includeOption = {};
+    // includeOption['attributes'] = includeOptionGar['include'][0]['attributes'];
+    includeOption['include'] = includeOptionGar['include'][0]['include'];
+    // console.log("Include option full", JSON.stringify(includeOption, null, 4));
+    return includeOption;
 }
 
 function convertToSequelizeCreate(key, json, shaObject) {
     // console.log("SHA ", shaObject);
     var sequelizeCreateJson = {};
     Object.keys(json).forEach(el => {
-        var newShaKey = shaObject['modelToShaMap'][key+"#"+el];
-        var newKey = key+"#"+el;
+        var newShaKey = shaObject['modelToShaMap'][key + "#" + el];
+        var newKey = key + "#" + el;
         if (json[el] instanceof Array) {
             sequelizeCreateJson[newShaKey] = [];
             // console.log("--------------New sha key", newShaKey, newKey);
@@ -474,7 +479,7 @@ CrudController.prototype = {
         var self = this;
         var select = { all: true };
         var tableName = this.shaObject['shaToModelMap'][this.model.getTableName()];
-        var includeOption = getIncludeOptions(self.complexLevel)
+        var includeOption = getIncludeOptions(self.modelMap, self.schemaStruct, tableName, self.shaObject);
         if (reqParams['select']) {
             var selectArray = reqParams.select.split(',');
             var excludeFlag = true;
@@ -484,24 +489,23 @@ CrudController.prototype = {
                 }
             })
             includeOption = generateInclude(selectArray, self.modelMap, tableName, excludeFlag, self.shaObject);
-            console.log("include option ", includeOption);  
+            // console.log("include option ", includeOption);
             select = includeOption['attributes'];
         }
-        
+
         // console.log("IncludeOption is "+JSON.stringify(includeOption, null ,4));
-        
+
         var jFiter = wrapSeqSchema(JSON.parse(filter), tableName, self.shaObject);
-        console.log("filter", JSON.stringify(jFiter, null, 4));
+        // console.log("filter", JSON.stringify(jFiter, null, 4));
         insertWhere(self.modelMap, includeOption, jFiter, tableName, self.shaObject);
         var baseWhere = {};
         if (typeof includeOption['where'] != 'undefined') {
             baseWhere = includeOption['where'];
         }
-        console.log("Include ", JSON.stringify(includeOption, null, 4));
         // console.log("Include option is "+JSON.stringify(includeOption, null, 4));
         // console.log("sort is ", sort);
         this.model.findAll({ limit: count, offset: skip, attributes: select, order: sort, include: includeOption['include'], where: baseWhere }).then(results => {
-            var resObj = results.map( (r) => ( r.toJSON() ) )
+            var resObj = results.map((r) => (r.toJSON()))
             console.log("results are ", resObj);
             unwrapSimpleArray(resObj);
             unwrapSeqSchema(resObj, self.shaObject);
@@ -522,8 +526,8 @@ CrudController.prototype = {
         console.log("Inside show");
         var reqParams = params.map(req);
         var select = { all: true };
-        var includeOption = getIncludeOptions(self.complexLevel);
         var tableName = this.shaObject['shaToModelMap'][this.model.getTableName()];
+        var includeOption = getIncludeOptions(self.modelMap, self.schemaStruct, tableName, self.shaObject);
         if (reqParams['select']) {
             var selectArray = reqParams.select.split(',');
             var excludeFlag = true;
@@ -537,7 +541,7 @@ CrudController.prototype = {
         }
         this.model.findOne({ where: { id: reqParams['id'] }, attributes: select, include: includeOption['include'] }).then(results => {
             // var resObj = JSON.parse(JSON.stringify(results, null, 4));
-            if(results === null){
+            if (results === null) {
                 return self.Error(res, new Error("No record found"))
             }
             var resObj = results.get({
@@ -567,7 +571,7 @@ CrudController.prototype = {
         var sequelizeBody = convertToSequelizeCreate(tableName, body, self.shaObject);
         // console.log("create body", sequelizeBody);
         // console.log("Sequelize Body is....\n" + JSON.stringify(sequelizeBody, null, 4));
-        var includeOption = getIncludeOptions(self.complexLevel);
+        var includeOption = getIncludeOptions(self.modelMap, self.schemaStruct, tableName, self.shaObject);
         // console.log("Include option ",includeOption);
         var ins = this.model.build(sequelizeBody, includeOption)
         ins.save().then(data => {
@@ -707,7 +711,7 @@ CrudController.prototype = {
         var tableName = this.shaObject['shaToModelMap'][this.model.getTableName()];
         // var sequelizeBody = convertToSequelizeCreate(tableName, body);
         // var collectionName=this.model.modelName;
-        var includeOption = getIncludeOptions(self.complexLevel);
+        var includeOption = getIncludeOptions(self.modelMap, self.schemaStruct, tableName, self.shaObject);
         var oldValues = {};
         var newValues = {};
         var updatePromises = [];
@@ -715,26 +719,26 @@ CrudController.prototype = {
             where: { id: reqParams['id'] }, include: includeOption['include']
         })
             .then(result => {
-                if(result === null){
+                if (result === null) {
                     return Promise.reject(new Error("No record found"))
                 }
                 oldValues = result;
                 result.changed('updatedAt', true)
                 updatePromises.push(result.save());
-                console.log("old result ",JSON.stringify(result ,null,4));
+                console.log("old result ", JSON.stringify(result, null, 4));
                 // console.log("table name ", tableName);
                 bodyData = wrapSeqSchema(bodyData, tableName, self.shaObject);
                 updateTable(result, bodyData, updatePromises, self.shaObject);
                 return Promise.all(updatePromises)
             })
-            .then((resolvedPromises) => {                
+            .then((resolvedPromises) => {
                 return self.model.findOne({
                     where: { id: reqParams['id'] }, include: includeOption['include']
                 })
             })
             .then(updatedResult => {
                 // var resObj = JSON.parse(JSON.stringify(updatedResult, null, 4));
-                if(updatedResult === null){
+                if (updatedResult === null) {
                     return Promise.reject(new Error("No record found"))
                 }
                 var resObj = updatedResult.get({
@@ -813,7 +817,7 @@ CrudController.prototype = {
         var reqParams = params.map(req);
         var self = this;
         this.model.findOne({ where: { id: reqParams['id'] } }).then(result => {
-            if(result === null){
+            if (result === null) {
                 return self.Error(res, new Error("No record found"));
             }
             result.destroy().then(rowsDeleted => {

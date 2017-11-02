@@ -8,6 +8,7 @@ var params = require('./swagger.params.map');
 const Sequelize = require("sequelize");
 const crypto = require('crypto');
 
+
 function generateTableName(data) {
   var dataArr = data.split('#');
   var tableName = "";
@@ -43,9 +44,10 @@ function generateTableName(data) {
 function SequelizeModel(sequelize, definition, modelName, options, hooks) {
   logger = options.logger ? options.logger : logger;
   var self = this;
-  var complexLevel = getDepthOfObject(definition) - 1;
-  generateSequelize(sequelize, modelName, definition)
+  // var complexLevel = getDepthOfObject(definition) - 1;
+  generateSequelize(sequelize, modelName, definition, schemaStruct)
     .then(model => {
+      // console.log("------schemaStruct ", JSON.stringify(schemaStruct, null,4))
       self.model = model;
       if (typeof hooks !== 'undefined') {
         hooks.forEach(hookObj => {
@@ -57,7 +59,7 @@ function SequelizeModel(sequelize, definition, modelName, options, hooks) {
     .then(() => {
       var shaObject = { shaToModelMap, modelToShaMap};
       // console.log("-----------------------SHAObject index", shaObject);
-      ParamController.call(self, self.model, modelName, logger, complexLevel, modelMap, shaObject);
+      ParamController.call(self, self.model, modelName, logger, schemaStruct, modelMap, shaObject);
     })
     .catch(err => {
       console.log("Something Messed up........ ", err);
@@ -79,9 +81,12 @@ function SequelizeModel(sequelize, definition, modelName, options, hooks) {
 var modelMap = [];
 var shaToModelMap = [];
 var modelToShaMap = [];
-function generateSequelize(sequelize, tableName, obj) {
+var schemaStruct = {};
+function generateSequelize(sequelize, tableName, obj, schemaStruct) {
   // console.log("object is ", JSON.stringify(obj, null, 4));
   console.log("New Table " + tableName);
+  schemaStruct[tableName] = {};
+  schemaStruct[tableName]['id'] = true;
   var childModels = [];
   var columns = {};
   var promises = [];
@@ -91,20 +96,22 @@ function generateSequelize(sequelize, tableName, obj) {
     }
     else if (typeof obj[el] == 'string') {
       columns['#value'] = obj;
+      schemaStruct[tableName]['#value'] = true;
       // console.log("Table "+tableName+" Column "+"Value");
     }
     else if (obj[el] instanceof Array) {
       console.log(tableName + "#" + el + " has Many relation");
       // console.log(JSON.stringify(obj[el][0],null,4));
-      promises.push(generateSequelize(sequelize, tableName + "#" + el, obj[el][0]).then(model =>
+      promises.push(generateSequelize(sequelize, tableName + "#" + el, obj[el][0], schemaStruct[tableName]).then(model =>
         childModels.push({ model: model, relationship: "many", name: tableName + "#" + el })));
     } else {
       if (typeof obj[el]["type"] == 'string') {
         columns[el] = obj[el];
+        schemaStruct[tableName][el] = true;
         // console.log("Table "+tableName+" Column "+el);
       } else {
         console.log(tableName + "#" + el + " has one relation");
-        promises.push(generateSequelize(sequelize, tableName + "#" + el, obj[el]).then(model =>
+        promises.push(generateSequelize(sequelize, tableName + "#" + el, obj[el], schemaStruct[tableName]).then(model =>
           childModels.push({ model: model, relationship: "one", name: tableName + "#" + el })));
       }
     }
