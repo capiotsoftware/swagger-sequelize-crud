@@ -82,14 +82,14 @@ function wrapSeqSchema(json, key, shaObject) {
             sequelizeJson[el] = json[el];
         }
         else if (json[el] instanceof Array) {
-            if(!newShaKey)throw new Error("Key "+el+" not valid");
+            if (!newShaKey) throw new Error("Key " + el + " not valid");
             sequelizeJson[newShaKey] = [];
             json[el].forEach(data => {
                 (typeof data == 'object') ? sequelizeJson[newShaKey].push(wrapSeqSchema(data, newKey, shaObject)) : sequelizeJson[newShaKey].push(data);
             })
         }
         else if (typeof json[el] == 'object') {
-            if(!newShaKey)throw new Error("Key "+el+" not valid");
+            if (!newShaKey) throw new Error("Key " + el + " not valid");
             sequelizeJson[newShaKey] = wrapSeqSchema(json[el], newKey, shaObject);
         }
         else {
@@ -260,9 +260,17 @@ function getDepthOfObject(object) {
 
 function getIncludeOptions(modelMap, schemaStruct, tableName, shaObject) {
     var includeOptionGar = generateIncludeRecursive(modelMap, schemaStruct, tableName, false, false, shaObject);
+    // console.log("includeOptionGar ", JSON.stringify(includeOptionGar, null, 4));
+    // console.log("tableName ", tableName);
     var includeOption = {};
     // includeOption['attributes'] = includeOptionGar['include'][0]['attributes'];
-    includeOption['include'] = includeOptionGar['include'][0]['include'];
+    for (var i = 0; i < includeOptionGar['include'].length; i++){
+        if(includeOptionGar['include'][i]['as'] == tableName){
+            includeOption['include'] = includeOptionGar['include'][i]['include'];
+            break; 
+        }
+    }
+        // includeOption['include'] = includeOptionGar['include'][0]['include'];
     // console.log("Include option full", JSON.stringify(includeOption, null, 4));
     return includeOption;
 }
@@ -572,7 +580,7 @@ CrudController.prototype = {
         // console.log("create body", sequelizeBody);
         // console.log("Sequelize Body is....\n" + JSON.stringify(sequelizeBody, null, 4));
         var includeOption = getIncludeOptions(self.modelMap, self.schemaStruct, tableName, self.shaObject);
-        // console.log("Include option ",includeOption);
+        // console.log("Include option ", includeOption);
         var ins = this.model.build(sequelizeBody, includeOption)
         ins.save().then(data => {
             var returnObj = data.get({
