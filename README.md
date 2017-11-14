@@ -1,7 +1,7 @@
 # swagger-sequelize-crud
 
 
-A Simple wrapper for Swagger based SQL CRUD operation. This plugin is a modfied version of the Mongoose CRUD operation introducted by [Micheal Krone](https://github.com/michaelkrone).
+A Simple wrapper for Swagger based SQL CRUD operation.
 
 This module exposes following basic operations.
 * Create
@@ -20,7 +20,7 @@ npm install https://bitbucket.org/capiot/swagger-sequelize-crud.git --save
 const Sequelize = require('sequelize');
 const SSCrud = require("swagger-sequelize-crud");
 //In your controller, simply expose the following
-var sequelize = new Sequelize("dbUrl,options);
+var sequelize = new Sequelize("dbUrl",options);
 //db needs to be created before using sequelize object
 var definition = {}; //Your mongoose Schema definition here.  
 var modelName = "Your Table Name";
