@@ -36,7 +36,10 @@ function insertWhere(modelMap, includeStruct, whereStruct) {
     Object.keys(whereStruct).forEach(el => {
         if (el == '$where') {
             includeStruct['where'] = whereStruct['$where'];
-        } else {
+        }else if(typeof el !== 'object'){
+            throw new Error('filter query not as expected')
+        }
+         else {
             if (typeof includeStruct['include'] == 'undefined')
                 includeStruct['include'] = [];
             var modelExistFlag = false;
@@ -449,22 +452,23 @@ CrudController.prototype = {
     _count: function (req, res) {
         var self = this;
         var reqParams = params.map(req);
-        var filter = reqParams['filter'] ? reqParams.filter : {};
-        if (typeof filter === 'string') {
-            try {
-                filter = JSON.parse(filter);
-                filter = self.FilterParse(filter);
-            } catch (err) {
-                this.logger.error('Failed to parse filter :' + err);
-                filter = {};
-            }
+        var filter = reqParams['filter'] ? reqParams.filter : '{}';
+        var tableName = this.shaObject['shaToModelMap'][this.model.getTableName()];
+        var includeOption = getIncludeOptions(self.modelMap, self.schemaStruct, tableName, self.shaObject);
+        var jFiter = wrapSeqSchema(JSON.parse(filter), tableName, self.shaObject);
+        insertWhere(self.modelMap, includeOption, jFiter, tableName, self.shaObject);
+        // console.log("insert object", includeOption);
+        var baseWhere = {};
+        if (typeof includeOption['where'] != 'undefined') {
+            baseWhere = includeOption['where'];
         }
-        if (this.omit.length > 0) {
-            filter = _.omit(filter, this.omit);
-        }
-        filter.deleted = false;
-        this.model.find(filter).count().exec().then(result => self.Okay(res, result),
-            err => self.Error(res, err));
+        this.model.findAll({ include: includeOption['include'], where: baseWhere }).then(results => {
+            var resObj = results.map((r) => (r.toJSON()))
+            // console.log("results are ", resObj);
+            return self.Okay(res, resObj.length);
+        }, err => {
+            return self.Error(res, err);
+        });
     },
     /**
     * Get a list of documents. If a request query is passed it is used as the
