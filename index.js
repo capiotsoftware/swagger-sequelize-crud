@@ -12,18 +12,18 @@ const crypto = require('crypto');
 function generateTableName(data) {
   var dataArr = data.split('#');
   var tableName = "";
-  if(dataArr.length>1){
-    tableName = dataArr.reduce((pre, cur)=>{
-      return pre+("_"+cur.substring(0,Math.min(2,cur.length)));
-      },"")
-  }else{
+  if (dataArr.length > 1) {
+    tableName = dataArr.reduce((pre, cur) => {
+      return pre + ("_" + cur.substring(0, Math.min(2, cur.length)));
+    }, "")
+  } else {
     tableName = data
   }
   var counter = 0;
-  while(shaToModelMap[tableName]){
+  while (shaToModelMap[tableName]) {
     // console.log("Table Name "+ tableName +" exist... Creating new tablename");
     counter++;
-    tableName = counter>1?tableName.substring(0,tableName.length-1)+counter:tableName+counter;
+    tableName = counter > 1 ? tableName.substring(0, tableName.length - 1) + counter : tableName + counter;
   }
   // console.log("Table name is ",tableName);
   return tableName;
@@ -45,25 +45,28 @@ function SequelizeModel(sequelize, definition, modelName, options, hooks) {
   logger = options.logger ? options.logger : logger;
   var self = this;
   // var complexLevel = getDepthOfObject(definition) - 1;
-  this.initialized = generateSequelize(sequelize, modelName, definition, schemaStruct)
-    .then(model => {
-      // console.log("------schemaStruct ", JSON.stringify(schemaStruct, null,4))
-      self.model = model;
-      if (typeof hooks !== 'undefined') {
-        hooks.forEach(hookObj => {
-          self.model.addHook(hookObj.event, hookObj.hookName, hookObj.func);
-        })
-      }
-      sequelize.sync()
-    })
-    .then(() => {
-      var shaObject = { shaToModelMap, modelToShaMap};
-      // console.log("-----------------------SHAObject index", shaObject);
-      ParamController.call(self, self.model, modelName, logger, schemaStruct, modelMap, shaObject);
-    })
-    .catch(err => {
-      console.log("Something Messed up........ ", err);
-    });
+  this.initialized = new Promise((resolve, reject) => {
+    generateSequelize(sequelize, modelName, definition, schemaStruct)
+      .then(model => {
+        // console.log("------schemaStruct ", JSON.stringify(schemaStruct, null,4))
+        self.model = model;
+        if (typeof hooks !== 'undefined') {
+          hooks.forEach(hookObj => {
+            self.model.addHook(hookObj.event, hookObj.hookName, hookObj.func);
+          })
+        }
+        return sequelize.sync()
+      })
+      .then(() => {
+        resolve();
+        var shaObject = { shaToModelMap, modelToShaMap };
+        // console.log("-----------------------SHAObject index", shaObject);
+        ParamController.call(self, self.model, modelName, logger, schemaStruct, modelMap, shaObject);
+      })
+      .catch(err => {
+        console.log("Something Messed up........ ", err);
+      });
+  })
 
   this.index = this._index.bind(this);
   this.create = this._create.bind(this);
@@ -132,7 +135,7 @@ function generateSequelize(sequelize, tableName, obj, schemaStruct) {
       shaToModelMap[newTableName] = tableName;
       modelToShaMap[tableName] = newTableName;
       childModels.forEach(el => {
-        if (el['relationship'] == 'many') { 
+        if (el['relationship'] == 'many') {
           model.hasMany(el['model'], { as: modelToShaMap[el['name']], onDelete: 'CASCADE', hooks: true, constraints: true });
           // el['model'].belongsTo(model);
         }
