@@ -45,7 +45,7 @@ function SequelizeModel(sequelize, definition, modelName, options, hooks) {
   logger = options.logger ? options.logger : logger;
   var self = this;
   // var complexLevel = getDepthOfObject(definition) - 1;
-  generateSequelize(sequelize, modelName, definition, schemaStruct)
+  this.initialized = generateSequelize(sequelize, modelName, definition, schemaStruct)
     .then(model => {
       // console.log("------schemaStruct ", JSON.stringify(schemaStruct, null,4))
       self.model = model;
